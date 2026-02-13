@@ -145,7 +145,7 @@ async def _handle_transcription_session(
             "state": "connecting_vllm",
         }))
 
-        async with vllm_client.connect() as session:
+        async with vllm_client.connect(language=language) as session:
             await websocket.send_text(json.dumps({
                 "type": "status",
                 "state": "recording",

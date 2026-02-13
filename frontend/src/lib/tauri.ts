@@ -3,8 +3,9 @@
  * When running in a plain browser (npm run dev), all calls are no-ops.
  */
 
-export const isTauri =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
 
 type UnlistenFn = () => void;
 
@@ -16,9 +17,16 @@ export async function listenEvent<T = unknown>(
   event: string,
   callback: (payload: T) => void,
 ): Promise<UnlistenFn> {
-  if (!isTauri) return () => {};
+  if (!isTauri()) {
+    console.log("[Tauri] listenEvent skipped (not in Tauri)", event);
+    return () => {};
+  }
+  console.log("[Tauri] listenEvent registering:", event);
   const { listen } = await import("@tauri-apps/api/event");
-  return listen<T>(event, (e) => callback(e.payload));
+  return listen<T>(event, (e) => {
+    console.log("[Tauri] event received:", event, e.payload);
+    callback(e.payload);
+  });
 }
 
 /**
@@ -29,7 +37,7 @@ export async function invokeCommand<T = unknown>(
   cmd: string,
   args?: Record<string, unknown>,
 ): Promise<T | undefined> {
-  if (!isTauri) return undefined;
+  if (!isTauri()) return undefined;
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<T>(cmd, args);
 }

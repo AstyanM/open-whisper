@@ -87,10 +87,21 @@ export function useTranscription(): UseTranscriptionReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleClose = useCallback(() => {
+    setState((prev) => {
+      if (prev !== "idle" && prev !== "error") {
+        setError("Connection lost");
+        return "error";
+      }
+      return prev;
+    });
+  }, []);
+
   const { send, connect, disconnect } = useWebSocket(
     `${WS_URL}/ws/transcribe`,
     handleMessage,
     handleOpen,
+    handleClose,
   );
 
   const start = useCallback(

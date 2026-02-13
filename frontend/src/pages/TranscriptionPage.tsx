@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Mic, Square } from "lucide-react";
+import { Mic, Square, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { TranscriptionView } from "@/components/TranscriptionView";
 import { useTranscription } from "@/hooks/useTranscription";
+import { useDictation } from "@/hooks/useDictation";
 import { useTauriShortcuts } from "@/hooks/useTauriShortcuts";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 
@@ -13,14 +15,16 @@ export function TranscriptionPage() {
   const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const { state, start, stop, liveText, error, elapsedMs } =
     useTranscription();
+  const dictation = useDictation();
+
+  const isTranscribing = state !== "idle" && state !== "error";
+  const isDictating = dictation.state !== "idle" && dictation.state !== "error";
+  const isActive = isTranscribing || isDictating;
 
   useTauriShortcuts({
-    onToggleDictation: () => {
-      // TODO Phase 3B: toggle dictation mode
-    },
+    onToggleDictation: () => dictation.toggle(language),
     onToggleTranscription: () => {
-      // Ctrl+Shift+T: toggle transcription (start/stop)
-      if (isActive) {
+      if (isTranscribing) {
         stop();
       } else {
         start(language);
@@ -28,14 +32,18 @@ export function TranscriptionPage() {
     },
   });
 
-  const isActive = state !== "idle" && state !== "error";
-
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       {/* Controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <StatusIndicator state={state} />
+          <StatusIndicator state={isDictating ? dictation.state : state} />
+          {isDictating && (
+            <Badge variant="secondary">
+              <Keyboard className="mr-1 h-3 w-3" />
+              Dictation
+            </Badge>
+          )}
           <Separator orientation="vertical" className="h-6" />
           <LanguageSelector
             value={language}
@@ -44,7 +52,7 @@ export function TranscriptionPage() {
           />
         </div>
 
-        {isActive ? (
+        {isTranscribing ? (
           <Button
             variant="destructive"
             onClick={stop}
@@ -54,7 +62,7 @@ export function TranscriptionPage() {
             Stop
           </Button>
         ) : (
-          <Button onClick={() => start(language)}>
+          <Button onClick={() => start(language)} disabled={isDictating}>
             <Mic className="mr-2 h-4 w-4" />
             Start
           </Button>
@@ -65,9 +73,9 @@ export function TranscriptionPage() {
       <TranscriptionView text={liveText} state={state} elapsedMs={elapsedMs} />
 
       {/* Error display */}
-      {error && (
+      {(error || dictation.error) && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
+          {error || dictation.error}
         </div>
       )}
     </div>

@@ -57,14 +57,14 @@ class VLLMRealtimeClient:
         self.uri = f"ws://{host}:{port}/v1/realtime"
         self.model = model
 
-    def connect(self) -> "RealtimeSession":
+    def connect(self, language: str | None = None) -> "RealtimeSession":
         """Create a new realtime transcription session.
 
         Use as async context manager:
-            async with client.connect() as session:
+            async with client.connect(language="fr") as session:
                 ...
         """
-        return RealtimeSession(self.uri, self.model)
+        return RealtimeSession(self.uri, self.model, language=language)
 
 
 class RealtimeSession:
@@ -73,9 +73,10 @@ class RealtimeSession:
     Manages the WebSocket connection lifecycle and the Realtime API protocol.
     """
 
-    def __init__(self, uri: str, model: str):
+    def __init__(self, uri: str, model: str, language: str | None = None):
         self.uri = uri
         self.model = model
+        self.language = language
         self._ws = None
         self._session_id: str | None = None
 

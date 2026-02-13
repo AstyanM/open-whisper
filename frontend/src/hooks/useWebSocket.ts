@@ -13,6 +13,7 @@ export function useWebSocket(
   url: string,
   onMessage: (data: unknown) => void,
   onOpen?: () => void,
+  onClose?: () => void,
 ): UseWebSocketReturn {
   const [state, setState] = useState<WsState>("disconnected");
   const wsRef = useRef<WebSocket | null>(null);
@@ -20,9 +21,16 @@ export function useWebSocket(
   onMessageRef.current = onMessage;
   const onOpenRef = useRef(onOpen);
   onOpenRef.current = onOpen;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
+      // Remove handlers before closing to avoid triggering onClose callback
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onopen = null;
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -53,9 +61,11 @@ export function useWebSocket(
     ws.onclose = () => {
       wsRef.current = null;
       setState("disconnected");
+      onCloseRef.current?.();
     };
 
-    ws.onerror = () => {
+    ws.onerror = (e) => {
+      console.error("[WebSocket] error:", e);
       ws.close();
     };
   }, [url, disconnect]);

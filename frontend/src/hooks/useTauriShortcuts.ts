@@ -15,17 +15,33 @@ export function useTauriShortcuts(options: UseTauriShortcutsOptions) {
   optionsRef.current = options;
 
   useEffect(() => {
+    let aborted = false;
     const cleanups: Array<() => void> = [];
 
     listenEvent("shortcut:toggle-dictation", () => {
+      console.log("[Shortcuts] toggle-dictation event received");
       optionsRef.current.onToggleDictation?.();
-    }).then((unlisten) => cleanups.push(unlisten));
+    }).then((unlisten) => {
+      if (aborted) {
+        unlisten();
+      } else {
+        cleanups.push(unlisten);
+      }
+    });
 
     listenEvent("shortcut:toggle-transcription", () => {
+      console.log("[Shortcuts] toggle-transcription event received");
       optionsRef.current.onToggleTranscription?.();
-    }).then((unlisten) => cleanups.push(unlisten));
+    }).then((unlisten) => {
+      if (aborted) {
+        unlisten();
+      } else {
+        cleanups.push(unlisten);
+      }
+    });
 
     return () => {
+      aborted = true;
       cleanups.forEach((fn) => fn());
     };
   }, []);

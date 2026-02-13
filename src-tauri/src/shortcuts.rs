@@ -9,7 +9,11 @@ pub fn register_shortcuts(app: &App) {
             let handle = handle.clone();
             move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    let _ = handle.emit("shortcut:toggle-dictation", ());
+                    println!("[Shortcuts] Ctrl+Shift+D pressed, emitting toggle-dictation");
+                    match handle.emit("shortcut:toggle-dictation", ()) {
+                        Ok(_) => println!("[Shortcuts] emit OK"),
+                        Err(e) => eprintln!("[Shortcuts] emit error: {e}"),
+                    }
                 }
             }
         })
@@ -20,9 +24,15 @@ pub fn register_shortcuts(app: &App) {
             let handle = handle.clone();
             move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    let _ = handle.emit("shortcut:toggle-transcription", ());
+                    println!("[Shortcuts] Ctrl+Shift+T pressed, emitting toggle-transcription");
+                    match handle.emit("shortcut:toggle-transcription", ()) {
+                        Ok(_) => println!("[Shortcuts] emit OK"),
+                        Err(e) => eprintln!("[Shortcuts] emit error: {e}"),
+                    }
                 }
             }
         })
         .expect("failed to register Ctrl+Shift+T");
+
+    println!("[Shortcuts] all shortcuts registered");
 }
