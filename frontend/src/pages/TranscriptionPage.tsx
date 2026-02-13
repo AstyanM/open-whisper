@@ -6,12 +6,27 @@ import { StatusIndicator } from "@/components/StatusIndicator";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { TranscriptionView } from "@/components/TranscriptionView";
 import { useTranscription } from "@/hooks/useTranscription";
+import { useTauriShortcuts } from "@/hooks/useTauriShortcuts";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 
 export function TranscriptionPage() {
   const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const { state, start, stop, liveText, error, elapsedMs } =
     useTranscription();
+
+  useTauriShortcuts({
+    onToggleDictation: () => {
+      // TODO Phase 3B: toggle dictation mode
+    },
+    onToggleTranscription: () => {
+      // Ctrl+Shift+T: toggle transcription (start/stop)
+      if (isActive) {
+        stop();
+      } else {
+        start(language);
+      }
+    },
+  });
 
   const isActive = state !== "idle" && state !== "error";
 
