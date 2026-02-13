@@ -1,0 +1,30 @@
+[project]
+name = "voice-to-speech-local-backend"
+version = "0.1.0"
+description = "Python backend for Voice-to-Speech Local — audio capture, transcription, and API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "websockets>=15.0",
+    "sounddevice>=0.5.1",
+    "numpy>=2.2.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "pyyaml>=6.0.2",
+    "aiosqlite>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

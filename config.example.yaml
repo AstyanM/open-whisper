@@ -1,0 +1,42 @@
+# Voice-to-Speech Local — Configuration Template
+# Copy this file to config.yaml and adjust settings as needed.
+
+# Default transcription language.
+# Supported: fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko
+language: "fr"
+
+# Global keyboard shortcuts (Tauri)
+shortcuts:
+  toggle_dictation: "Ctrl+Shift+D"      # Activate/deactivate dictation mode
+  toggle_transcription: "Ctrl+Shift+T"  # Open/focus transcription window
+
+# Model settings
+models:
+  transcription:
+    name: "mistralai/Voxtral-Mini-4B-Realtime-2602"  # HuggingFace model ID
+    quantization: "awq"       # awq, gptq, or bf16
+    delay_ms: 480             # Streaming delay (80-2400ms, sweet spot: 480ms)
+    vllm_port: 8000           # Port where vLLM server is running
+
+# Audio capture settings
+audio:
+  sample_rate: 16000          # Sample rate in Hz (16kHz for Voxtral)
+  channels: 1                 # Mono audio
+  device: "default"           # Audio input device name or index
+  chunk_duration_ms: 80       # Duration per chunk (80ms = 1 Voxtral token)
+
+# Overlay window settings
+overlay:
+  enabled: true
+  position: "top-right"       # top-left, top-right, bottom-left, bottom-right
+  opacity: 0.85               # 0.1 to 1.0
+  size: "small"               # small, medium
+
+# Storage settings
+storage:
+  db_path: "./data/sessions.db"  # Path to SQLite database
+
+# Backend server settings
+backend:
+  host: "127.0.0.1"
+  port: 8001

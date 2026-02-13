@@ -1,0 +1,12 @@
+{
+  "name": "voice-to-speech-local",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "tauri": "tauri",
+    "backend": "cd backend && .venv\\Scripts\\python -m src.main",
+    "test:backend": "cd backend && .venv\\Scripts\\python -m pytest tests/ -v"
+  }
+}

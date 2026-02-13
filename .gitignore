@@ -1,1 +1,45 @@
+# Claude
 .claude/
+
+# Dependencies
+node_modules/
+backend/.venv/
+
+# Build outputs
+frontend/dist/
+src-tauri/target/
+src-tauri/icons/
+
+# Data (local database)
+data/
+
+# Models
+models/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (local settings, use config.example.yaml as template)
+config.yaml
+
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Logs
+*.log
+
+# Root package-lock (frontend has its own)
+/package-lock.json
