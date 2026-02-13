@@ -9,6 +9,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.audio.capture import AudioCapture
+from src.exceptions import (
+    AudioDeviceError,
+    DatabaseError,
+    VLLMConnectionError,
+    VLLMTimeoutError,
+    VTSError,
+)
 from src.transcription.client import VLLMRealtimeClient
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
@@ -16,6 +23,28 @@ from src.storage.repository import SessionRepository
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
+
+
+async def _send_ws_error(
+    websocket: WebSocket, message: str, code: str = "internal_error"
+) -> None:
+    """Send an error message to the client, silently ignoring failures."""
+    try:
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": message,
+            "code": code,
+        }))
+    except Exception:
+        logger.debug(f"Could not send error to client: {code}: {message}")
+
+
+async def _send_ws_json(websocket: WebSocket, data: dict) -> None:
+    """Send a JSON message to the client, silently ignoring failures."""
+    try:
+        await websocket.send_text(json.dumps(data))
+    except Exception:
+        logger.debug(f"Could not send message to client: {data.get('type', '?')}")
 
 
 @ws_router.websocket("/ws/transcribe")
@@ -48,13 +77,7 @@ async def websocket_transcribe(websocket: WebSocket):
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
-        try:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": str(e),
-            }))
-        except Exception:
-            pass
+        await _send_ws_error(websocket, str(e))
 
 
 async def _handle_transcription_session(
@@ -68,12 +91,23 @@ async def _handle_transcription_session(
     language = language_override or config.language
 
     # Create DB session
-    db = get_db()
+    try:
+        db = get_db()
+    except RuntimeError:
+        await _send_ws_error(websocket, "Database not available", "database_error")
+        return
+
     repo = SessionRepository(db)
     started_at = datetime.now(timezone.utc)
-    session_id = await repo.create_session(
-        mode=mode, language=language, started_at=started_at
-    )
+
+    try:
+        session_id = await repo.create_session(
+            mode=mode, language=language, started_at=started_at
+        )
+    except DatabaseError as e:
+        logger.error(f"Failed to create session: {e}")
+        await _send_ws_error(websocket, "Failed to create session", e.code)
+        return
 
     await websocket.send_text(json.dumps({
         "type": "session_started",
@@ -157,51 +191,55 @@ async def _handle_transcription_session(
                 receive_and_forward(session),
             )
 
+    except VLLMConnectionError as e:
+        logger.error(f"vLLM connection failed: {e}")
+        await _send_ws_error(websocket, str(e), e.code)
+    except VLLMTimeoutError as e:
+        logger.error(f"vLLM timeout: {e}")
+        await _send_ws_error(websocket, str(e), e.code)
+    except AudioDeviceError as e:
+        logger.error(f"Audio device error: {e}")
+        await _send_ws_error(websocket, str(e), e.code)
+    except WebSocketDisconnect:
+        logger.info("Client disconnected during session")
     except Exception as e:
-        logger.error(f"Transcription session error: {e}", exc_info=True)
-        try:
-            await websocket.send_text(json.dumps({
-                "type": "error",
-                "message": str(e),
-                "code": "session_error",
-            }))
-        except Exception:
-            pass
+        logger.error(f"Unexpected session error: {e}", exc_info=True)
+        await _send_ws_error(websocket, "An unexpected error occurred")
 
     # Finalize session
-    ended_at = datetime.now(timezone.utc)
-    duration_s = (ended_at - started_at).total_seconds()
-    await repo.end_session(session_id, ended_at, duration_s)
+    try:
+        ended_at = datetime.now(timezone.utc)
+        duration_s = (ended_at - started_at).total_seconds()
+        await repo.end_session(session_id, ended_at, duration_s)
 
-    # Save segment
-    if full_text.strip():
-        segment_id = await repo.add_segment(
-            session_id=session_id,
-            text=full_text.strip(),
-            start_ms=0,
-            end_ms=int(duration_s * 1000),
-        )
-        try:
-            await websocket.send_text(json.dumps({
+        # Save segment
+        if full_text.strip():
+            segment_id = await repo.add_segment(
+                session_id=session_id,
+                text=full_text.strip(),
+                start_ms=0,
+                end_ms=int(duration_s * 1000),
+            )
+            await _send_ws_json(websocket, {
                 "type": "segment_complete",
                 "segment_id": segment_id,
                 "text": full_text.strip(),
                 "start_ms": 0,
                 "end_ms": int(duration_s * 1000),
-            }))
-        except Exception:
-            pass
+            })
 
-    try:
-        await websocket.send_text(json.dumps({
+        await _send_ws_json(websocket, {
             "type": "session_ended",
             "session_id": session_id,
             "duration_s": round(duration_s, 2),
-        }))
-    except Exception:
-        pass
+        })
 
-    logger.info(
-        f"Session {session_id} ended: {duration_s:.1f}s, "
-        f"{len(full_text)} chars"
-    )
+        logger.info(
+            f"Session {session_id} ended: {duration_s:.1f}s, "
+            f"{len(full_text)} chars"
+        )
+    except DatabaseError as e:
+        logger.error(f"Failed to finalize session {session_id}: {e}")
+        await _send_ws_error(websocket, "Failed to save session", e.code)
+    except Exception as e:
+        logger.error(f"Failed to finalize session {session_id}: {e}", exc_info=True)

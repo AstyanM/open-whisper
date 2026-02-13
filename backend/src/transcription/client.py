@@ -10,6 +10,7 @@ Implements the OpenAI-compatible Realtime API protocol:
   7. Receive transcription.delta (partial) and transcription.done (final)
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -17,7 +18,13 @@ from typing import Callable
 
 import websockets
 
+from src.exceptions import VLLMConnectionError, VLLMTimeoutError, VLLMProtocolError
+
 logger = logging.getLogger(__name__)
+
+CONNECT_TIMEOUT_S = 10
+HANDSHAKE_TIMEOUT_S = 10
+RECV_TIMEOUT_S = 30
 
 
 @dataclass
@@ -83,12 +90,35 @@ class RealtimeSession:
     async def __aenter__(self):
         """Open WebSocket and perform session handshake."""
         logger.info(f"Connecting to vLLM Realtime API at {self.uri}")
-        self._ws = await websockets.connect(self.uri)
+
+        try:
+            self._ws = await websockets.connect(
+                self.uri, open_timeout=CONNECT_TIMEOUT_S
+            )
+        except (ConnectionRefusedError, OSError) as e:
+            raise VLLMConnectionError(
+                f"Cannot connect to vLLM at {self.uri}: {e}"
+            ) from e
+        except asyncio.TimeoutError:
+            raise VLLMConnectionError(
+                f"Connection to vLLM at {self.uri} timed out after {CONNECT_TIMEOUT_S}s"
+            )
 
         # 1. Wait for session.created
-        response = json.loads(await self._ws.recv())
+        try:
+            raw = await asyncio.wait_for(
+                self._ws.recv(), timeout=HANDSHAKE_TIMEOUT_S
+            )
+            response = json.loads(raw)
+        except asyncio.TimeoutError:
+            raise VLLMTimeoutError(
+                f"vLLM did not send session.created within {HANDSHAKE_TIMEOUT_S}s"
+            )
+
         if response.get("type") != "session.created":
-            raise RuntimeError(f"Expected session.created, got: {response}")
+            raise VLLMProtocolError(
+                f"Expected session.created, got: {response.get('type')}"
+            )
         self._session_id = response.get("id", "unknown")
         logger.info(f"Session created: {self._session_id}")
 
@@ -108,7 +138,10 @@ class RealtimeSession:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Close the WebSocket connection."""
         if self._ws is not None:
-            await self._ws.close()
+            try:
+                await self._ws.close()
+            except Exception:
+                logger.debug("Error closing vLLM WebSocket", exc_info=True)
             self._ws = None
             logger.info("Realtime session closed")
 
@@ -147,7 +180,15 @@ class RealtimeSession:
         # Collect transcription
         full_text = ""
         while True:
-            response = json.loads(await self._ws.recv())
+            try:
+                raw = await asyncio.wait_for(
+                    self._ws.recv(), timeout=RECV_TIMEOUT_S
+                )
+            except asyncio.TimeoutError:
+                raise VLLMTimeoutError(
+                    f"vLLM did not respond within {RECV_TIMEOUT_S}s during finish"
+                )
+            response = json.loads(raw)
             msg_type = response.get("type", "")
 
             if msg_type == "transcription.delta":
@@ -187,7 +228,15 @@ class RealtimeSession:
             raise RuntimeError("Session not connected")
 
         while True:
-            response = json.loads(await self._ws.recv())
+            try:
+                raw = await asyncio.wait_for(
+                    self._ws.recv(), timeout=RECV_TIMEOUT_S
+                )
+            except asyncio.TimeoutError:
+                raise VLLMTimeoutError(
+                    f"vLLM did not respond within {RECV_TIMEOUT_S}s during streaming"
+                )
+            response = json.loads(raw)
             msg_type = response.get("type", "")
 
             if msg_type == "transcription.delta":

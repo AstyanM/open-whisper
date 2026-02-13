@@ -24,7 +24,17 @@ export interface SessionDetail {
   full_text: string;
 }
 
-export async function fetchHealth(): Promise<{ status: string }> {
+export interface HealthResponse {
+  status: string;
+  service: string;
+  checks: {
+    database?: { status: string; message?: string };
+    vllm?: { status: string; message?: string };
+    audio?: { status: string; input_devices?: number; message?: string };
+  };
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(`${BACKEND_URL}/health`);
   if (!res.ok) throw new Error("Backend unreachable");
   return res.json();

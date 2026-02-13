@@ -377,22 +377,37 @@ voice-to-speech-local/
 15. Implémenter le system tray
 16. Sélecteur de langue dans l'UI et le tray
 
-### Phase 4 — Polish + release (semaine 7-8)
+### Phase 4.1 — Robustesse & Tests (semaine 7)
 
-17. Page de paramètres (config visuelle)
-18. Gestion d'erreurs robuste (vLLM down, micro indisponible, etc.)
-19. Script d'installation automatisé (setup.ps1)
-20. Documentation README complète
-21. Tests unitaires et d'intégration
-22. Premier tag de release GitHub
+17. Gestion d'erreurs robuste (vLLM down, micro indisponible, WebSocket coupé, backend KO)
+18. Tests unitaires et d'intégration (config, storage, WebSocket, capture audio mock, flux end-to-end)
+19. Health checks : endpoint `/health` backend + vérification périodique côté Tauri
+
+> **Vérification** : les tests passent, l'app se comporte correctement quand on coupe volontairement vLLM, le micro ou le backend.
+
+### Phase 4.2 — Page de paramètres (semaine 7-8)
+
+20. UI Settings : page React avec formulaire (langue, raccourcis, device audio, position overlay, delay streaming)
+21. API REST : endpoints `GET /config` et `PUT /config` pour lire/écrire `config.yaml`
+22. Application à chaud : certains paramètres (langue, overlay) sans redémarrage ; les autres signalent qu'un redémarrage est nécessaire
+
+> **Vérification** : modifier chaque paramètre via l'UI, vérifier que `config.yaml` est mis à jour et que le changement prend effet.
+
+### Phase 4.3 — Packaging & Release (semaine 8)
+
+23. Script d'installation automatisé (`setup.ps1` : venv, dépendances, modèle, build Tauri)
+24. Documentation README complète (prérequis, installation, utilisation, configuration, FAQ)
+25. Premier tag de release GitHub (build release, `.msi`/`.exe`, tag Git, release avec assets)
+
+> **Vérification** : suivre le README depuis zéro sur une machine propre, vérifier que le script d'install fonctionne et que l'app tourne.
 
 ### Phase 5 — V2
 
-23. Intégration Mistral 7B pour résumés automatiques
-24. Recherche full-text (FTS5)
-25. Export Markdown/TXT/SRT
-26. Diarisation (si modèle disponible)
-27. Commandes vocales
+26. Intégration Mistral 7B pour résumés automatiques
+27. Recherche full-text (FTS5)
+28. Export Markdown/TXT/SRT
+29. Diarisation (si modèle disponible)
+30. Commandes vocales
 
 ---
 

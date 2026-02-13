@@ -11,6 +11,7 @@ from src.config import load_config, AppConfig
 from src.api.routes import router as api_router
 from src.api.ws import ws_router
 from src.storage.database import init_db, close_db, set_db
+from src.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +22,25 @@ config: AppConfig | None = None
 async def lifespan(app: FastAPI):
     """Application lifespan: load config on startup."""
     global config
-    config = load_config()
+
+    try:
+        config = load_config()
+    except FileNotFoundError:
+        logger.error("config.yaml not found. Cannot start backend.")
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {e}")
+        raise
+
     logger.info("Configuration loaded successfully")
     logger.info(f"Backend running on {config.backend.host}:{config.backend.port}")
 
-    db = await init_db(config.storage.db_path)
+    try:
+        db = await init_db(config.storage.db_path)
+    except DatabaseError as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
+
     set_db(db)
     logger.info("Database initialized")
 

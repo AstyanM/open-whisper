@@ -5,6 +5,8 @@ from pathlib import Path
 
 import aiosqlite
 
+from src.exceptions import DatabaseError
+
 logger = logging.getLogger(__name__)
 
 _db: aiosqlite.Connection | None = None
@@ -36,14 +38,17 @@ CREATE TABLE IF NOT EXISTS segments (
 async def init_db(db_path: str) -> aiosqlite.Connection:
     """Initialize the SQLite database and create tables if needed."""
     path = Path(db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
 
-    db = await aiosqlite.connect(str(path))
-    db.row_factory = aiosqlite.Row
-    await db.execute("PRAGMA journal_mode=WAL")
-    await db.execute("PRAGMA foreign_keys=ON")
-    await db.executescript(_SCHEMA_SQL)
-    await db.commit()
+        db = await aiosqlite.connect(str(path))
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA foreign_keys=ON")
+        await db.executescript(_SCHEMA_SQL)
+        await db.commit()
+    except (aiosqlite.Error, OSError) as e:
+        raise DatabaseError(f"Failed to initialize database at {path}: {e}") from e
 
     logger.info(f"Database initialized at {path.resolve()}")
     return db

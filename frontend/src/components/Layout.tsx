@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Mic, History } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 
 const navItems = [
   { to: "/", label: "Transcription", icon: Mic },
@@ -43,6 +44,7 @@ export function Layout() {
         </div>
       </header>
       <main className="p-6">
+        <BackendStatusBanner />
         <Outlet />
       </main>
     </div>

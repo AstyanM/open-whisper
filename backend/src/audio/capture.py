@@ -12,6 +12,8 @@ import logging
 import numpy as np
 import sounddevice as sd
 
+from src.exceptions import AudioDeviceError, AudioDeviceNotFoundError
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +54,7 @@ class AudioCapture:
         try:
             self._loop.call_soon_threadsafe(self._queue.put_nowait, pcm16.tobytes())
         except Exception:
-            pass  # Queue full or loop closed, skip this chunk
+            logger.debug("Audio callback: queue full or loop closed, dropping chunk")
 
     async def stream(self):
         """Async generator that yields base64-encoded PCM16 audio chunks.
@@ -63,15 +65,25 @@ class AudioCapture:
         """
         self._loop = asyncio.get_running_loop()
         self._running = True
-        self._stream = sd.InputStream(
-            samplerate=self.sample_rate,
-            channels=self.channels,
-            dtype="float32",
-            blocksize=self.chunk_samples,
-            device=self.device,
-            callback=self._audio_callback,
-        )
-        self._stream.start()
+
+        try:
+            self._stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=self.channels,
+                dtype="float32",
+                blocksize=self.chunk_samples,
+                device=self.device,
+                callback=self._audio_callback,
+            )
+            self._stream.start()
+        except sd.PortAudioError as e:
+            error_msg = str(e).lower()
+            if "no" in error_msg and "device" in error_msg:
+                raise AudioDeviceNotFoundError(
+                    f"Audio input device not found: {e}"
+                ) from e
+            raise AudioDeviceError(f"Audio device error: {e}") from e
+
         logger.info(
             f"Audio capture started: {self.sample_rate}Hz, "
             f"{self.channels}ch, {self.chunk_duration_ms}ms chunks"
@@ -92,7 +104,7 @@ class AudioCapture:
         try:
             self._loop.call_soon_threadsafe(self._queue.put_nowait, None)
         except Exception:
-            pass
+            logger.debug("Stop signal: queue or loop unavailable")
 
     def _stop_stream(self):
         """Clean up the sounddevice stream."""

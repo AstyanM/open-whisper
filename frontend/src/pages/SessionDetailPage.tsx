@@ -47,13 +47,21 @@ export function SessionDetailPage() {
   const [data, setData] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     fetchSession(parseInt(id))
       .then(setData)
-      .catch(() => setNotFound(true))
+      .catch((e) => {
+        const msg = e.message ?? "";
+        if (msg.includes("404") || msg.includes("not found")) {
+          setNotFound(true);
+        } else {
+          setError(msg || "Failed to load session");
+        }
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -74,6 +82,21 @@ export function SessionDetailPage() {
     return (
       <div className="mx-auto max-w-2xl py-12 text-center text-muted-foreground">
         Loading...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-2xl py-12 text-center">
+        <p className="text-destructive">{error}</p>
+        <Button
+          variant="ghost"
+          className="mt-4"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </Button>
       </div>
     );
   }

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Trash2 } from "lucide-react";
+import { FileText, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,12 +31,20 @@ export function SessionListPage() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadSessions = useCallback(() => {
+    setLoading(true);
+    setError(null);
     fetchSessions()
       .then(setSessions)
+      .catch((e) => setError(e.message ?? "Failed to load sessions"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   async function handleDelete(e: React.MouseEvent, id: number) {
     e.stopPropagation();
@@ -49,6 +57,18 @@ export function SessionListPage() {
     return (
       <div className="mx-auto max-w-2xl py-12 text-center text-muted-foreground">
         Loading...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-2xl py-12 text-center">
+        <p className="text-destructive">{error}</p>
+        <Button variant="ghost" className="mt-4" onClick={loadSessions}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Retry
+        </Button>
       </div>
     );
   }
