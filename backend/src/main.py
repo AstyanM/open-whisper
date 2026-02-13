@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import load_config, AppConfig
 from src.api.routes import router as api_router
+from src.api.ws import ws_router
+from src.storage.database import init_db, close_db, set_db
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,14 @@ async def lifespan(app: FastAPI):
     config = load_config()
     logger.info("Configuration loaded successfully")
     logger.info(f"Backend running on {config.backend.host}:{config.backend.port}")
+
+    db = await init_db(config.storage.db_path)
+    set_db(db)
+    logger.info("Database initialized")
+
     yield
+
+    await close_db(db)
     logger.info("Shutting down backend")
 
 
@@ -46,6 +55,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(ws_router)
 
 
 def main():
