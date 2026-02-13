@@ -1,5 +1,6 @@
 mod injection;
 mod shortcuts;
+mod tray;
 
 #[tauri::command]
 fn start_drag(window: tauri::Window) -> Result<(), String> {
@@ -13,6 +14,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![injection::inject_text, start_drag])
         .setup(|app| {
             shortcuts::register_shortcuts(app);
+            tray::create_tray(app).expect("failed to create system tray");
             Ok(())
         })
         .run(tauri::generate_context!())

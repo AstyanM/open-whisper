@@ -9,7 +9,7 @@ import { TranscriptionView } from "@/components/TranscriptionView";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useDictation } from "@/hooks/useDictation";
 import { useTauriShortcuts } from "@/hooks/useTauriShortcuts";
-import { emitEvent } from "@/lib/tauri";
+import { emitEvent, listenEvent } from "@/lib/tauri";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 
 export function TranscriptionPage() {
@@ -32,6 +32,20 @@ export function TranscriptionPage() {
       }
     },
   });
+
+  // Sync language from tray menu
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listenEvent<string>("tray:language-changed", (code) => {
+      if (!isActive) setLanguage(code);
+    }).then((fn) => (unlisten = fn));
+    return () => unlisten?.();
+  }, [isActive]);
+
+  // Notify tray when language changes from UI
+  useEffect(() => {
+    emitEvent("language-changed", language);
+  }, [language]);
 
   // Emit mic state to overlay window
   useEffect(() => {
