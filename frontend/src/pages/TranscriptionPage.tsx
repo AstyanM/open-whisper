@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Mic, Square, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { TranscriptionView } from "@/components/TranscriptionView";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useDictation } from "@/hooks/useDictation";
 import { useTauriShortcuts } from "@/hooks/useTauriShortcuts";
+import { emitEvent } from "@/lib/tauri";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 
 export function TranscriptionPage() {
@@ -31,6 +32,29 @@ export function TranscriptionPage() {
       }
     },
   });
+
+  // Emit mic state to overlay window
+  useEffect(() => {
+    if (isDictating) {
+      emitEvent("mic-state-changed", {
+        state: dictation.state,
+        language,
+        mode: "dictation" as const,
+      });
+    } else if (isTranscribing) {
+      emitEvent("mic-state-changed", {
+        state,
+        language,
+        mode: "transcription" as const,
+      });
+    } else {
+      emitEvent("mic-state-changed", {
+        state: "idle" as const,
+        language,
+        mode: "none" as const,
+      });
+    }
+  }, [state, dictation.state, language, isDictating, isTranscribing]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

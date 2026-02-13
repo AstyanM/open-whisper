@@ -30,6 +30,19 @@ export async function listenEvent<T = unknown>(
 }
 
 /**
+ * Emit a Tauri event (received by all windows + Rust listeners).
+ * No-op if not running in Tauri.
+ */
+export async function emitEvent<T>(
+  event: string,
+  payload: T,
+): Promise<void> {
+  if (!isTauri()) return;
+  const { emit } = await import("@tauri-apps/api/event");
+  await emit(event, payload);
+}
+
+/**
  * Invoke a Tauri command (Rust #[tauri::command]).
  * No-op if not running in Tauri.
  */
