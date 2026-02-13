@@ -191,6 +191,8 @@ class RealtimeSession:
 
             if msg_type == "transcription.delta":
                 delta = response.get("delta", "")
+                if not delta:
+                    continue
                 if on_delta:
                     on_delta(delta)
                 yield delta
