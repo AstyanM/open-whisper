@@ -1,4 +1,4 @@
-# Voice-to-Speech Local — Product Requirements Document
+# OpenWhisper — Product Requirements Document
 
 ## 1. Vision produit
 
@@ -212,7 +212,7 @@ CREATE VIRTUAL TABLE segments_fts USING fts5(text, content=segments, content_row
 Fichier `config.yaml` à la racine du projet :
 
 ```yaml
-# Voice-to-Speech Local — Configuration
+# OpenWhisper — Configuration
 
 language: "fr" # Langue par défaut (fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko)
 
@@ -256,7 +256,7 @@ backend:
 ## 7. Structure du projet
 
 ```
-voice-to-speech-local/
+openwhisper/
 ├── README.md                           # Guide d'installation et d'utilisation
 ├── LICENSE                             # Apache 2.0
 ├── config.yaml                         # Configuration utilisateur

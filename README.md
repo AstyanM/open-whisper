@@ -1,4 +1,4 @@
-# Voice-to-Speech Local
+# OpenWhisper
 
 Local, real-time voice transcription powered by **Voxtral Mini 4B Realtime** (Mistral AI) via vLLM.
 No data leaves your machine.
@@ -120,7 +120,7 @@ Tauri v2 (Rust shell) -> React 19 + Vite (frontend)
 ## Project Structure
 
 ```
-voice-to-speech-local/
+openwhisper/
 ├── frontend/               # React 19 + Vite + Tailwind CSS
 │   ├── src/                # React components
 │   ├── index.html

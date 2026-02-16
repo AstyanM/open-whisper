@@ -25,14 +25,45 @@ interface OverlayConfigPayload {
   show_duration: boolean;
 }
 
-const stateStyles: Record<string, { color: string; pulse: boolean }> = {
-  idle: { color: "bg-gray-500", pulse: false },
-  connecting: { color: "bg-yellow-500", pulse: true },
-  connecting_vllm: { color: "bg-yellow-500", pulse: true },
-  recording: { color: "bg-red-500", pulse: true },
-  finalizing: { color: "bg-yellow-500", pulse: true },
-  error: { color: "bg-red-500", pulse: false },
+const modeColors = {
+  transcription: {
+    dot: "bg-amber-500",
+    ping: "bg-amber-500",
+    glow: "shadow-[0_0_8px_rgba(245,158,11,0.5)]",
+    text: "text-amber-200",
+    modeText: "text-amber-300",
+  },
+  dictation: {
+    dot: "bg-emerald-500",
+    ping: "bg-emerald-500",
+    glow: "shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+    text: "text-emerald-200",
+    modeText: "text-emerald-300",
+  },
+  none: {
+    dot: "bg-stone-500",
+    ping: "bg-stone-500",
+    glow: "",
+    text: "text-stone-300",
+    modeText: "text-stone-400",
+  },
 };
+
+function getOverlayStyle(
+  state: MicStatePayload["state"],
+  mode: MicStatePayload["mode"],
+) {
+  const colors = modeColors[mode] ?? modeColors.none;
+
+  if (state === "error") {
+    return { dot: "bg-red-500", ping: "bg-red-500", glow: "", pulse: false, text: "text-red-200", modeText: "text-red-300" };
+  }
+  if (state === "idle") {
+    return { dot: "bg-stone-500", ping: "bg-stone-500", glow: "", pulse: false, text: "text-stone-300", modeText: "text-stone-400" };
+  }
+  const pulse = state === "connecting" || state === "connecting_vllm" || state === "recording" || state === "finalizing";
+  return { ...colors, pulse };
+}
 
 export function OverlayPage() {
   const [micState, setMicState] = useState<MicStatePayload>({
@@ -160,7 +191,7 @@ export function OverlayPage() {
     invokeCommand("start_drag");
   };
 
-  const { color, pulse } = stateStyles[micState.state] ?? stateStyles.idle;
+  const style = getOverlayStyle(micState.state, micState.mode);
   const langCode = micState.language.toUpperCase();
   const modeLabel =
     micState.mode === "transcription"
@@ -173,32 +204,42 @@ export function OverlayPage() {
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      className="flex h-screen w-screen cursor-grab items-center justify-center bg-gray-900 select-none active:cursor-grabbing"
+      className="flex h-screen w-screen cursor-grab items-center justify-center rounded-lg border border-stone-700/50 bg-stone-900 backdrop-blur-sm select-none active:cursor-grabbing"
       style={{ opacity: overlayOpacity }}
       onMouseDown={handleMouseDown}
     >
       <div className="pointer-events-none flex items-center gap-2">
         <span className="relative flex h-3 w-3">
-          {pulse && (
+          {style.pulse && (
             <span
               className={cn(
                 "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
-                color,
+                style.ping,
               )}
             />
           )}
           <span
-            className={cn("relative inline-flex h-3 w-3 rounded-full", color)}
+            className={cn(
+              "relative inline-flex h-3 w-3 rounded-full",
+              style.dot,
+              style.glow,
+            )}
           />
         </span>
         {showLanguage && (
-          <span className="text-xs font-medium text-gray-200">{langCode}</span>
+          <span className={cn("text-xs font-medium", style.text)}>
+            {langCode}
+          </span>
         )}
         {showMode && modeLabel && (
-          <span className="text-xs font-medium text-gray-400">{modeLabel}</span>
+          <span className={cn("text-xs font-medium", style.modeText)}>
+            {modeLabel}
+          </span>
         )}
         {showDuration && micState.state === "recording" && (
-          <span className="text-xs font-mono text-gray-300">{durationStr}</span>
+          <span className="text-xs font-mono text-stone-300">
+            {durationStr}
+          </span>
         )}
       </div>
     </div>

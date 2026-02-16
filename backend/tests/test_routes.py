@@ -25,7 +25,7 @@ async def test_health_returns_structured_response(client):
     assert data["status"] in ("healthy", "degraded", "unhealthy")
     assert "checks" in data
     assert "database" in data["checks"]
-    assert data["service"] == "voice-to-speech-local-backend"
+    assert data["service"] == "openwhisper-backend"
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { TranscriptionProvider } from "@/contexts/TranscriptionContext";
 import { TranscriptionPage } from "@/pages/TranscriptionPage";
 import { SessionListPage } from "@/pages/SessionListPage";
@@ -10,6 +11,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <Toaster />
       <Routes>
@@ -28,6 +30,7 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

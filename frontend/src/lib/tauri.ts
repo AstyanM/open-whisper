@@ -13,7 +13,7 @@ type UnlistenFn = () => void;
 /** Lazy-initialised BroadcastChannel for browser dev mode. */
 let _channel: BroadcastChannel | null = null;
 function getBroadcastChannel(): BroadcastChannel {
-  if (!_channel) _channel = new BroadcastChannel("vts-events");
+  if (!_channel) _channel = new BroadcastChannel("openwhisper-events");
   return _channel;
 }
 

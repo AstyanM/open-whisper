@@ -51,7 +51,7 @@ pub fn create_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("Voice to Speech Local")
+        .tooltip("OpenWhisper")
         .on_menu_event(move |app, event| {
             let id = event.id().as_ref();
             match id {

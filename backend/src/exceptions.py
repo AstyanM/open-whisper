@@ -2,7 +2,7 @@
 
 
 class VTSError(Exception):
-    """Base exception for all voice-to-speech errors."""
+    """Base exception for all OpenWhisper errors."""
 
     code: str = "unknown_error"
 

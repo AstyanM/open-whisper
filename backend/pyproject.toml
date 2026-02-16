@@ -1,7 +1,7 @@
 [project]
-name = "voice-to-speech-local-backend"
+name = "openwhisper-backend"
 version = "0.1.0"
-description = "Python backend for Voice-to-Speech Local — audio capture, transcription, and API"
+description = "Python backend for OpenWhisper — audio capture, transcription, and API"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",

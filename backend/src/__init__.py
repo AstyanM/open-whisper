@@ -1,1 +1,1 @@
-"""Voice-to-Speech Local backend."""
+"""OpenWhisper backend."""

@@ -1,4 +1,4 @@
-# CLAUDE.md — Voice-to-Speech Local
+# CLAUDE.md — OpenWhisper
 
 ## Project Overview
 
@@ -78,7 +78,7 @@ uv pip install -e ".[dev]"
 ## Project Structure
 
 ```
-voice-to-speech-local/
+openwhisper/
 ├── CLAUDE.md                    # This file
 ├── config.yaml                  # User config (gitignored, use config.example.yaml)
 ├── config.example.yaml          # Config template

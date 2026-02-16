@@ -3,18 +3,34 @@ import type { TranscriptionState } from "@/hooks/useTranscription";
 
 const stateConfig: Record<
   TranscriptionState,
-  { color: string; pulse: boolean; label: string }
+  { color: string; glow: string; pulse: boolean; label: string }
 > = {
-  idle: { color: "bg-green-500", pulse: false, label: "Ready" },
-  connecting: { color: "bg-yellow-500", pulse: true, label: "Connecting..." },
+  idle: { color: "bg-stone-500", glow: "", pulse: false, label: "Ready" },
+  connecting: {
+    color: "bg-amber-500",
+    glow: "shadow-[0_0_6px_rgba(245,158,11,0.4)]",
+    pulse: true,
+    label: "Connecting...",
+  },
   connecting_vllm: {
-    color: "bg-yellow-500",
+    color: "bg-amber-500",
+    glow: "shadow-[0_0_6px_rgba(245,158,11,0.4)]",
     pulse: true,
     label: "Connecting to vLLM...",
   },
-  recording: { color: "bg-red-500", pulse: true, label: "Recording" },
-  finalizing: { color: "bg-yellow-500", pulse: true, label: "Finalizing..." },
-  error: { color: "bg-red-500", pulse: false, label: "Error" },
+  recording: {
+    color: "bg-amber-500",
+    glow: "shadow-[0_0_6px_rgba(245,158,11,0.4)]",
+    pulse: true,
+    label: "Recording",
+  },
+  finalizing: {
+    color: "bg-amber-500",
+    glow: "shadow-[0_0_6px_rgba(245,158,11,0.4)]",
+    pulse: true,
+    label: "Finalizing...",
+  },
+  error: { color: "bg-red-500", glow: "", pulse: false, label: "Error" },
 };
 
 interface StatusIndicatorProps {
@@ -39,6 +55,7 @@ export function StatusIndicator({ state }: StatusIndicatorProps) {
           className={cn(
             "relative inline-flex h-3 w-3 rounded-full",
             config.color,
+            config.glow,
           )}
         />
       </span>

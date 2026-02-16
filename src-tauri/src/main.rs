@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    voice_to_speech_local_lib::run();
+    openwhisper_lib::run();
 }

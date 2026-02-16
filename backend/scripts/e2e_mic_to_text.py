@@ -81,7 +81,7 @@ async def main():
         asyncio.get_running_loop().add_signal_handler(signal.SIGINT, handle_sigint)
 
     print("\n" + "=" * 60)
-    print("  Voice-to-Speech Local — E2E Test")
+    print("  OpenWhisper — E2E Test")
     print("  Speak into your microphone. Press Ctrl+C to stop.")
     print("=" * 60 + "\n")
 

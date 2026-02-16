@@ -1,4 +1,4 @@
-"""FastAPI application entry point for Voice-to-Speech Local backend."""
+"""FastAPI application entry point for OpenWhisper backend."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Voice-to-Speech Local",
+    title="OpenWhisper",
     description="Local voice transcription backend",
     version="0.1.0",
     lifespan=lifespan,

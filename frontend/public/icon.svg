@@ -1,0 +1,22 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="amber-grad" x1="4" y1="8" x2="40" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#d97706"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fine borders (stone-500) -->
+  <path d="M8 24C8 15.1634 15.1634 8 24 8C32.8366 8 40 15.1634 40 24"
+        stroke="#78716c" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M40 24C40 30 36 36 28 36C20 36 20 28 12 28C6 28 4 32 4 36"
+        stroke="#78716c" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="38" cy="36" r="4.75" fill="#78716c"/>
+
+  <!-- Main shapes (amber gradient) -->
+  <path d="M8 24C8 15.1634 15.1634 8 24 8C32.8366 8 40 15.1634 40 24"
+        stroke="url(#amber-grad)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M40 24C40 30 36 36 28 36C20 36 20 28 12 28C6 28 4 32 4 36"
+        stroke="url(#amber-grad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="38" cy="36" r="4" fill="#f59e0b"/>
+</svg>

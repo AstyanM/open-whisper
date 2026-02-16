@@ -1,5 +1,14 @@
 import { useCallback, useRef, useState } from "react";
-import { Save, RotateCcw, Loader2 } from "lucide-react";
+import {
+  Save,
+  RotateCcw,
+  Loader2,
+  Globe,
+  AudioLines,
+  Layers,
+  Zap,
+  Wrench,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -96,7 +105,12 @@ export function SettingsPage() {
             <RotateCcw className="mr-2 h-4 w-4" />
             Reset
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={!isDirty || saving}>
+          <Button
+            size="sm"
+            className="bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-stone-900 dark:hover:bg-amber-400"
+            onClick={handleSave}
+            disabled={!isDirty || saving}
+          >
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -126,9 +140,12 @@ export function SettingsPage() {
       )}
 
       {/* ── General ────────────────────────────────────────── */}
-      <Card>
+      <Card className="border-accent-top">
         <CardHeader>
-          <CardTitle>General</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            General
+          </CardTitle>
           <CardDescription>Language and keyboard shortcuts.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -158,9 +175,12 @@ export function SettingsPage() {
       </Card>
 
       {/* ── Audio ──────────────────────────────────────────── */}
-      <Card>
+      <Card className="border-accent-top">
         <CardHeader>
-          <CardTitle>Audio</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <AudioLines className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Audio
+          </CardTitle>
           <CardDescription>
             Microphone and capture settings. Device changes require a restart.
           </CardDescription>
@@ -220,9 +240,12 @@ export function SettingsPage() {
       </Card>
 
       {/* ── Overlay ────────────────────────────────────────── */}
-      <Card>
+      <Card className="border-accent-top">
         <CardHeader>
-          <CardTitle>Overlay</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Overlay
+          </CardTitle>
           <CardDescription>
             Floating indicator showing microphone state.
           </CardDescription>
@@ -326,9 +349,12 @@ export function SettingsPage() {
       </Card>
 
       {/* ── Streaming ──────────────────────────────────────── */}
-      <Card>
+      <Card className="border-accent-top">
         <CardHeader>
-          <CardTitle>Streaming</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Streaming
+          </CardTitle>
           <CardDescription>
             Transcription streaming parameters.
           </CardDescription>
@@ -385,9 +411,12 @@ export function SettingsPage() {
       </Card>
 
       {/* ── Advanced (read-only) ───────────────────────────── */}
-      <Card>
+      <Card className="border-accent-top">
         <CardHeader>
-          <CardTitle>Advanced</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Advanced
+          </CardTitle>
           <CardDescription>
             Read-only values. Edit config.yaml directly to change these.
           </CardDescription>

@@ -186,7 +186,10 @@ export function SessionListPage() {
                 <Card
                   className={cn(
                     "cursor-pointer transition-all duration-300",
-                    "hover:bg-accent/50",
+                    "hover:shadow-md hover:-translate-y-0.5",
+                    s.mode === "transcription"
+                      ? "border-l-4 border-l-amber-500"
+                      : "border-l-4 border-l-emerald-500",
                     isDeleting
                       ? "translate-x-full opacity-0"
                       : "translate-x-0 opacity-100",
@@ -199,7 +202,15 @@ export function SessionListPage() {
                         <Badge variant="secondary">
                           {languageLabel(s.language)}
                         </Badge>
-                        <Badge variant="outline">{s.mode}</Badge>
+                        <Badge
+                          variant={
+                            s.mode === "transcription"
+                              ? "transcription"
+                              : "dictation"
+                          }
+                        >
+                          {s.mode}
+                        </Badge>
                         <span className="text-sm text-muted-foreground">
                           {formatDuration(s.duration_s)}
                         </span>

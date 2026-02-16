@@ -79,7 +79,7 @@ async def health_check():
         if overall == "healthy":
             overall = "degraded"
 
-    return {"status": overall, "service": "voice-to-speech-local-backend", "checks": checks}
+    return {"status": overall, "service": "openwhisper-backend", "checks": checks}
 
 
 @router.get("/api/config")

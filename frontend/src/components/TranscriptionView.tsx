@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
+import { Mic } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { TranscriptionState } from "@/hooks/useTranscription";
 
 interface TranscriptionViewProps {
@@ -31,10 +33,15 @@ export function TranscriptionView({
 
   const isRecording = state === "recording";
   const isFinalizing = state === "finalizing";
+  const isActive = isRecording || isFinalizing;
   const showDuration = elapsedMs > 0;
 
   return (
-    <Card>
+    <Card
+      className={cn(
+        isActive && "ring-2 ring-amber-500/20 glow-amber",
+      )}
+    >
       <CardContent className="p-0">
         {showDuration && (
           <div className="flex justify-end px-4 pt-3">
@@ -47,14 +54,15 @@ export function TranscriptionView({
         >
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
             {text || (
-              <span className="text-muted-foreground italic">
+              <span className="flex flex-col items-center justify-center gap-2 pt-32 text-muted-foreground italic">
+                <Mic className="h-8 w-8 opacity-30" />
                 {state === "idle"
                   ? "Click Start to begin transcription..."
                   : "Waiting for speech..."}
               </span>
             )}
-            {(isRecording || isFinalizing) && (
-              <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+            {isActive && (
+              <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-amber-500" />
             )}
           </div>
         </div>

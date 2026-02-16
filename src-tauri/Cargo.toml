@@ -1,11 +1,11 @@
 [package]
-name = "voice-to-speech-local"
+name = "openwhisper"
 version = "0.1.0"
 description = "Local real-time voice transcription powered by Voxtral Mini 4B"
 edition = "2021"
 
 [lib]
-name = "voice_to_speech_local_lib"
+name = "openwhisper_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

@@ -24,13 +24,19 @@ export function TranscriptionPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       {/* Controls */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-4 py-3">
         <div className="flex items-center gap-4">
           <StatusIndicator state={isDictating ? dictation.state : state} />
           {isDictating && (
-            <Badge variant="secondary">
+            <Badge variant="dictation">
               <Keyboard className="mr-1 h-3 w-3" />
               Dictation
+            </Badge>
+          )}
+          {isTranscribing && (
+            <Badge variant="transcription">
+              <Mic className="mr-1 h-3 w-3" />
+              Transcription
             </Badge>
           )}
           <Separator orientation="vertical" className="h-6" />

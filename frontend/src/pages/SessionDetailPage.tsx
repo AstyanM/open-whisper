@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { DeleteSessionDialog } from "@/components/DeleteSessionDialog";
 import { fetchSession, deleteSession } from "@/lib/api";
 import { LANGUAGES } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { SessionDetail } from "@/lib/api";
 
 function formatDuration(seconds: number | null): string {
@@ -140,7 +141,13 @@ export function SessionDetailPage() {
       {/* Metadata */}
       <div className="flex items-center gap-3">
         <Badge variant="secondary">{languageLabel(session.language)}</Badge>
-        <Badge variant="outline">{session.mode}</Badge>
+        <Badge
+          variant={
+            session.mode === "transcription" ? "transcription" : "dictation"
+          }
+        >
+          {session.mode}
+        </Badge>
         <span className="text-sm text-muted-foreground">
           {formatDuration(session.duration_s)}
         </span>
@@ -182,13 +189,16 @@ export function SessionDetailPage() {
               Segments ({segments.length})
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {segments.map((seg) => (
+          <CardContent className="space-y-1">
+            {segments.map((seg, i) => (
               <div
                 key={seg.id}
-                className="flex items-start gap-3 rounded-md border p-2"
+                className={cn(
+                  "flex items-start gap-3 rounded-md p-2",
+                  i % 2 === 0 ? "bg-secondary/30" : "",
+                )}
               >
-                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                <span className="shrink-0 font-mono text-xs text-amber-600 dark:text-amber-400">
                   {formatMs(seg.start_ms)}
                   {seg.end_ms != null && ` → ${formatMs(seg.end_ms)}`}
                 </span>
