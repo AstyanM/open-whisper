@@ -21,6 +21,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { MicTest } from "@/components/MicTest";
 import { useSettings } from "@/hooks/useSettings";
 import type { AppConfig, OverlayConfig } from "@/lib/api";
 
@@ -210,6 +211,10 @@ export function SettingsPage() {
             <span className="text-sm text-muted-foreground">
               {draft.audio.channels === 1 ? "Mono" : "Stereo"}
             </span>
+          </div>
+
+          <div className="border-t pt-4">
+            <MicTest device={draft.audio.device} />
           </div>
         </CardContent>
       </Card>

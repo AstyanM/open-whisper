@@ -1,11 +1,13 @@
 """WebSocket endpoint for real-time audio streaming and transcription."""
 
 import asyncio
+import base64
 import json
 import logging
 import time
 from datetime import datetime, timezone
 
+import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.audio.capture import AudioCapture
@@ -249,3 +251,95 @@ async def _handle_transcription_session(
         await _send_ws_error(websocket, "Failed to save session", e.code)
     except Exception as e:
         logger.error(f"Failed to finalize session {session_id}: {e}", exc_info=True)
+
+
+@ws_router.websocket("/ws/mic-test")
+async def websocket_mic_test(websocket: WebSocket):
+    """WebSocket endpoint for microphone testing (volume meter).
+
+    Protocol:
+    1. Client connects
+    2. Client sends {"type": "start", "device": "default"}
+    3. Server captures audio and streams {"type": "level", "rms": 0.0-1.0}
+    4. Client sends {"type": "stop"} or disconnects
+    5. Server sends {"type": "stopped"}
+    """
+    await websocket.accept()
+    logger.info("Mic-test client connected")
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+
+            if msg.get("type") == "start":
+                device = msg.get("device", "default")
+                await _handle_mic_test(websocket, device)
+    except WebSocketDisconnect:
+        logger.info("Mic-test client disconnected")
+    except RuntimeError as e:
+        if "disconnect" in str(e).lower():
+            logger.info("Mic-test client disconnected")
+        else:
+            logger.error(f"Mic-test error: {e}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Mic-test error: {e}", exc_info=True)
+        await _send_ws_error(websocket, str(e))
+
+
+async def _handle_mic_test(websocket: WebSocket, device: str) -> None:
+    """Capture audio and stream RMS volume levels back to the client."""
+    from src.main import config
+
+    capture = AudioCapture(
+        sample_rate=config.audio.sample_rate,
+        channels=config.audio.channels,
+        chunk_duration_ms=config.audio.chunk_duration_ms,
+        device=device if device != "default" else None,
+    )
+
+    stop_event = asyncio.Event()
+
+    async def listen_for_stop():
+        try:
+            while not stop_event.is_set():
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+                if msg.get("type") == "stop":
+                    stop_event.set()
+                    capture.stop()
+                    return
+        except WebSocketDisconnect:
+            stop_event.set()
+            capture.stop()
+
+    async def stream_levels():
+        try:
+            async for chunk_b64 in capture.stream():
+                if stop_event.is_set():
+                    break
+                # Decode base64 → PCM16 int16 → compute RMS
+                pcm_bytes = base64.b64decode(chunk_b64)
+                samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+                rms = float(np.sqrt(np.mean(samples ** 2)) / 32768.0)
+                await websocket.send_text(json.dumps({
+                    "type": "level",
+                    "rms": round(rms, 4),
+                }))
+        except Exception:
+            pass  # stream ended
+        finally:
+            capture.stop()
+
+    try:
+        await websocket.send_text(json.dumps({"type": "started"}))
+        await asyncio.gather(listen_for_stop(), stream_levels())
+        await _send_ws_json(websocket, {"type": "stopped"})
+    except AudioDeviceError as e:
+        logger.error(f"Mic-test audio error: {e}")
+        await _send_ws_error(websocket, str(e), e.code)
+    except WebSocketDisconnect:
+        logger.info("Mic-test client disconnected during test")
+    except Exception as e:
+        logger.error(f"Mic-test error: {e}", exc_info=True)
+        await _send_ws_error(websocket, "An unexpected error occurred")

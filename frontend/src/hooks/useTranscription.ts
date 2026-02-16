@@ -13,6 +13,7 @@ export type TranscriptionState =
 export interface UseTranscriptionReturn {
   state: TranscriptionState;
   start: (language?: string) => void;
+  resume: (language?: string) => void;
   stop: () => void;
   liveText: string;
   sessionId: number | null;
@@ -31,6 +32,7 @@ export function useTranscription(): UseTranscriptionReturn {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedOffsetRef = useRef(0);
   const languageRef = useRef(DEFAULT_LANGUAGE);
 
   const handleMessage = useCallback(
@@ -54,7 +56,7 @@ export function useTranscription(): UseTranscriptionReturn {
           if (delta) {
             setLiveText((prev) => prev + delta);
           }
-          setElapsedMs(msg.elapsed_ms as number);
+          setElapsedMs(elapsedOffsetRef.current + (msg.elapsed_ms as number));
           break;
         }
 
@@ -110,11 +112,24 @@ export function useTranscription(): UseTranscriptionReturn {
       setSessionId(null);
       setError(null);
       setElapsedMs(0);
+      elapsedOffsetRef.current = 0;
       setState("connecting");
       languageRef.current = language ?? DEFAULT_LANGUAGE;
       connect();
     },
     [connect],
+  );
+
+  const resume = useCallback(
+    (language?: string) => {
+      setSessionId(null);
+      setError(null);
+      elapsedOffsetRef.current = elapsedMs;
+      setState("connecting");
+      languageRef.current = language ?? DEFAULT_LANGUAGE;
+      connect();
+    },
+    [connect, elapsedMs],
   );
 
   const stop = useCallback(() => {
@@ -123,5 +138,5 @@ export function useTranscription(): UseTranscriptionReturn {
     // Do NOT disconnect here — wait for session_ended from backend
   }, [send]);
 
-  return { state, start, stop, liveText, sessionId, error, elapsedMs };
+  return { state, start, resume, stop, liveText, sessionId, error, elapsedMs };
 }

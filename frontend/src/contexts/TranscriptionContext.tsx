@@ -42,6 +42,8 @@ export function TranscriptionProvider({
     onToggleTranscription: () => {
       if (isTranscribing) {
         transcription.stop();
+      } else if (transcription.liveText) {
+        transcription.resume(language);
       } else {
         transcription.start(language);
       }

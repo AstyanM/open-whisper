@@ -1,4 +1,4 @@
-import { Mic, Square, Keyboard } from "lucide-react";
+import { Mic, Square, Keyboard, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -18,7 +18,8 @@ export function TranscriptionPage() {
     isActive,
   } = useTranscriptionContext();
 
-  const { state, start, stop, liveText, error, elapsedMs } = transcription;
+  const { state, start, resume, stop, liveText, error, elapsedMs } = transcription;
+  const hasText = liveText.length > 0;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -50,10 +51,22 @@ export function TranscriptionPage() {
             Stop
           </Button>
         ) : (
-          <Button onClick={() => start(language)} disabled={isDictating}>
-            <Mic className="mr-2 h-4 w-4" />
-            Start
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasText && (
+              <Button onClick={() => resume(language)} disabled={isDictating}>
+                <Play className="mr-2 h-4 w-4" />
+                Continue
+              </Button>
+            )}
+            <Button
+              variant={hasText ? "outline" : "default"}
+              onClick={() => start(language)}
+              disabled={isDictating}
+            >
+              <Mic className="mr-2 h-4 w-4" />
+              {hasText ? "New" : "Start"}
+            </Button>
+          </div>
         )}
       </div>
 
