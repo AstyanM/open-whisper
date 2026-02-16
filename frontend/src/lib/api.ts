@@ -117,6 +117,11 @@ export interface TranscriptionModelConfig {
   overlap_duration_s: number;
   end_padding_ms: number;
   post_roll_ms: number;
+  repetition_penalty: number;
+  no_repeat_ngram_size: number;
+  compression_ratio_threshold: number;
+  log_prob_threshold: number;
+  hallucination_max_repeats: number;
 }
 
 export interface LLMConfig {

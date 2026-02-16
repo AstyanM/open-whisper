@@ -372,8 +372,18 @@ class WhisperSession:
                 )
 
                 if text.strip():
-                    await self._delta_queue.put(text)
-                    self._previous_text = text.strip()
+                    # Check for hallucination before accepting the text
+                    if self._is_hallucinated(text, self._config.hallucination_max_repeats):
+                        _debug(f"[WHISPER] Chunk #{chunk_count - 1} discarded (hallucination)")
+                        logger.warning(
+                            "[Worker] Chunk #%d discarded: hallucination detected",
+                            chunk_count - 1,
+                        )
+                        # Reset previous text to break the hallucination chain
+                        self._previous_text = ""
+                    else:
+                        await self._delta_queue.put(text)
+                        self._previous_text = text.strip()
 
                 if self._end_of_audio.is_set() and len(self._audio_buffer) == 0:
                     _debug("[WHISPER] End of audio reached, no more data, exiting worker")
@@ -387,6 +397,40 @@ class WhisperSession:
             _debug("[WHISPER] Worker sending sentinel to stream")
             logger.info("[Worker] Sending sentinel to stream")
             await self._delta_queue.put(None)  # Signal completion
+
+    @staticmethod
+    def _is_hallucinated(text: str, max_repeats: int = 3) -> bool:
+        """Detect if text contains repetitive hallucination patterns.
+
+        Checks for any phrase (3+ words) that repeats more than max_repeats
+        times consecutively. This is a reliable sign of Whisper hallucination.
+        """
+        if not text or len(text) < 30:
+            return False
+        words = text.split()
+        if len(words) < 6:
+            return False
+        # Check n-grams of size 3 to 6
+        for ngram_size in range(3, min(7, len(words) // 2 + 1)):
+            for start in range(len(words) - ngram_size + 1):
+                ngram = " ".join(words[start : start + ngram_size])
+                count = 0
+                i = start
+                while i + ngram_size <= len(words):
+                    candidate = " ".join(words[i : i + ngram_size])
+                    if candidate == ngram:
+                        count += 1
+                        i += ngram_size
+                    else:
+                        break
+                if count > max_repeats:
+                    _debug(f"[WHISPER] Hallucination detected: '{ngram}' repeated {count}x")
+                    logger.warning(
+                        "[Transcribe] Hallucination detected: '%s' repeated %dx",
+                        ngram, count,
+                    )
+                    return True
+        return False
 
     def _transcribe_chunk(self, audio: np.ndarray) -> str:
         """Run faster-whisper transcription on a float32 audio array. Sync."""
@@ -427,15 +471,35 @@ class WhisperSession:
             initial_prompt=prompt,
             temperature=self._config.temperature,
             condition_on_previous_text=False,
+            repetition_penalty=self._config.repetition_penalty,
+            no_repeat_ngram_size=self._config.no_repeat_ngram_size,
         )
-        # Force-consume the generator (it's lazy)
+        # Force-consume the generator with per-segment quality filtering
+        compression_threshold = self._config.compression_ratio_threshold
+        logprob_threshold = self._config.log_prob_threshold
         result_parts = []
         for seg in segments:
             text = seg.text.strip()
-            if text:
-                result_parts.append(text)
-                _debug(f"[WHISPER] Segment: {repr(text)}")
-                logger.info("[Transcribe] Segment: %s", repr(text))
+            if not text:
+                continue
+            # Filter out low-quality segments (hallucination indicators)
+            if hasattr(seg, "compression_ratio") and seg.compression_ratio > compression_threshold:
+                _debug(f"[WHISPER] Skipping segment (compression_ratio={seg.compression_ratio:.2f} > {compression_threshold}): {repr(text[:60])}")
+                logger.warning(
+                    "[Transcribe] Skipping segment (compression_ratio=%.2f > %.1f): %s",
+                    seg.compression_ratio, compression_threshold, repr(text[:60]),
+                )
+                continue
+            if hasattr(seg, "avg_logprob") and seg.avg_logprob < logprob_threshold:
+                _debug(f"[WHISPER] Skipping segment (avg_logprob={seg.avg_logprob:.2f} < {logprob_threshold}): {repr(text[:60])}")
+                logger.warning(
+                    "[Transcribe] Skipping segment (avg_logprob=%.2f < %.1f): %s",
+                    seg.avg_logprob, logprob_threshold, repr(text[:60]),
+                )
+                continue
+            result_parts.append(text)
+            _debug(f"[WHISPER] Segment: {repr(text)}")
+            logger.info("[Transcribe] Segment: %s", repr(text))
         result = " ".join(result_parts)
         _debug(f"[WHISPER] _transcribe_chunk done: {repr(result[:100]) if result else '(empty)'}")
         logger.info("[Transcribe] Done: %s", repr(result[:100]) if result else "(empty)")

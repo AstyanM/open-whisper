@@ -32,12 +32,20 @@ def make_audio_chunk(duration_ms: int = 80, sample_rate: int = 16000) -> str:
     return base64.b64encode(pcm.tobytes()).decode("ascii")
 
 
+def make_mock_segment(text: str) -> MagicMock:
+    """Create a mock segment with realistic quality metrics."""
+    seg = MagicMock()
+    seg.text = text
+    seg.compression_ratio = 1.5
+    seg.avg_logprob = -0.3
+    return seg
+
+
 @pytest.mark.asyncio
 async def test_session_lifecycle(fw_config):
     """Session can be created, receive audio, and produce transcription."""
     mock_model = MagicMock()
-    mock_segment = MagicMock()
-    mock_segment.text = "Hello world"
+    mock_segment = make_mock_segment("Hello world")
     mock_model.transcribe.return_value = ([mock_segment], MagicMock())
 
     with patch(
@@ -84,8 +92,7 @@ async def test_empty_audio_yields_nothing(fw_config):
 async def test_signal_end_flushes_remaining_buffer(fw_config):
     """signal_end_of_audio should cause any remaining buffered audio to be transcribed."""
     mock_model = MagicMock()
-    mock_segment = MagicMock()
-    mock_segment.text = "Final chunk"
+    mock_segment = make_mock_segment("Final chunk")
     mock_model.transcribe.return_value = ([mock_segment], MagicMock())
 
     with patch(
@@ -136,8 +143,7 @@ async def test_send_audio_accumulates_buffer(fw_config):
 async def test_transcribe_called_with_correct_params(fw_config):
     """Transcribe should be called with the correct language and settings."""
     mock_model = MagicMock()
-    mock_segment = MagicMock()
-    mock_segment.text = "Test"
+    mock_segment = make_mock_segment("Test")
     mock_model.transcribe.return_value = ([mock_segment], MagicMock())
 
     with patch(

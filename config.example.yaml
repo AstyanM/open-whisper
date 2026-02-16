@@ -26,6 +26,11 @@ models:
     overlap_duration_s: 1.0     # Audio overlap between chunks to avoid cut words (0-5)
     end_padding_ms: 300         # Silence appended before transcription to avoid truncation (0-1000)
     post_roll_ms: 1200          # Extra audio capture after stop to avoid cutting last words (0-5000)
+    repetition_penalty: 1.15    # Penalizes repeated tokens to prevent hallucination loops (1.0-2.0)
+    no_repeat_ngram_size: 4     # Prevents repeating any N-gram of this size (0 = disabled, 3-6)
+    compression_ratio_threshold: 2.4  # Discard segments above this ratio (hallucination indicator)
+    log_prob_threshold: -1.0    # Discard segments with avg log prob below this (-5.0 to 0.0)
+    hallucination_max_repeats: 3  # Max phrase repeats before chunk is discarded (2-10)
 
   # LLM post-processing (summarization, text rewriting)
   # Uses any OpenAI-compatible API (Ollama, LM Studio, vLLM, cloud providers)
