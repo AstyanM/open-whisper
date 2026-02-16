@@ -141,3 +141,68 @@ class SessionRepository:
         """Get concatenated text of all segments for a session."""
         segments = await self.get_segments(session_id)
         return " ".join(seg.text for seg in segments)
+
+    async def filter_sessions(
+        self,
+        session_ids: list[int] | None = None,
+        language: str | None = None,
+        mode: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        duration_min: float | None = None,
+        duration_max: float | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[SessionRow]:
+        """Filter sessions with optional constraints. Preserves session_ids order when provided."""
+        try:
+            conditions: list[str] = []
+            params: list = []
+
+            if session_ids is not None:
+                if not session_ids:
+                    return []
+                placeholders = ",".join("?" for _ in session_ids)
+                conditions.append(f"id IN ({placeholders})")
+                params.extend(session_ids)
+
+            if language:
+                conditions.append("language = ?")
+                params.append(language)
+
+            if mode:
+                conditions.append("mode = ?")
+                params.append(mode)
+
+            if date_from:
+                conditions.append("started_at >= ?")
+                params.append(date_from)
+
+            if date_to:
+                conditions.append("started_at <= ?")
+                params.append(date_to)
+
+            if duration_min is not None:
+                conditions.append("duration_s >= ?")
+                params.append(duration_min)
+
+            if duration_max is not None:
+                conditions.append("duration_s <= ?")
+                params.append(duration_max)
+
+            where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            query = f"SELECT * FROM sessions {where} ORDER BY started_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            cursor = await self.db.execute(query, params)
+            rows = await cursor.fetchall()
+            results = [SessionRow(**dict(r)) for r in rows]
+
+            # Preserve ChromaDB relevance ordering when session_ids provided
+            if session_ids is not None:
+                id_order = {sid: i for i, sid in enumerate(session_ids)}
+                results.sort(key=lambda s: id_order.get(s.id, len(session_ids)))
+
+            return results
+        except aiosqlite.Error as e:
+            raise DatabaseError(f"Failed to filter sessions: {e}") from e

@@ -18,7 +18,7 @@ vLLM Server (Voxtral Mini 4B, GPU)
 
 - **Frontend** (`frontend/`): React 19 + Vite + Tailwind CSS v4 + shadcn/ui. Served by Tauri webview.
 - **Tauri** (`src-tauri/`): Rust shell — global shortcuts, text injection (enigo), overlay window, system tray, sidecar process management.
-- **Backend** (`backend/`): Python 3.13 + FastAPI — audio capture (sounddevice), WebSocket streaming, SQLite storage, config loading.
+- **Backend** (`backend/`): Python 3.13 + FastAPI — audio capture (sounddevice), WebSocket streaming, SQLite storage, ChromaDB semantic search, config loading.
 - **Config**: `config.yaml` at project root, validated by Pydantic in `backend/src/config.py`.
 
 ## Tech Stack
@@ -32,6 +32,7 @@ vLLM Server (Voxtral Mini 4B, GPU)
 | Audio | sounddevice (PortAudio wrapper) | 16kHz mono, 80ms chunks |
 | Transcription | vLLM + Voxtral Mini 4B Realtime | AWQ quantization, GPU |
 | Storage | SQLite via aiosqlite | Sessions + timestamped segments |
+| Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, local CPU |
 | Text injection | enigo 0.6 + arboard 3 (clipboard fallback) | Win32 SendInput |
 | Package mgmt | npm (frontend), uv (backend), cargo (Rust) | |
 
@@ -91,10 +92,13 @@ voice-to-speech-local/
 │       ├── config.py            # Pydantic config loader (config.yaml)
 │       ├── exceptions.py        # Custom exception classes
 │       ├── api/
-│       │   ├── routes.py        # REST endpoints (health, sessions, config)
+│       │   ├── routes.py        # REST endpoints (health, sessions, config, search)
 │       │   └── ws.py            # WebSocket endpoints (audio stream)
 │       ├── audio/
 │       │   └── capture.py       # Microphone capture (sounddevice)
+│       ├── search/
+│       │   ├── vector_store.py  # ChromaDB singleton (index, search, delete)
+│       │   └── backfill.py      # Backfill existing sessions into ChromaDB
 │       ├── storage/
 │       │   ├── database.py      # SQLite init + migrations
 │       │   └── repository.py    # CRUD for sessions & segments
@@ -112,21 +116,24 @@ voice-to-speech-local/
 │       │   ├── TranscriptionView.tsx
 │       │   ├── StatusIndicator.tsx
 │       │   ├── LanguageSelector.tsx
-│       │   └── ui/              # shadcn/ui primitives
+│       │   ├── DeleteSessionDialog.tsx  # AlertDialog for session deletion
+│       │   ├── SessionSearchBar.tsx     # Search + filter bar (semantic + metadata)
+│       │   └── ui/              # shadcn/ui primitives (alert-dialog, sonner, ...)
 │       ├── hooks/
 │       │   ├── useWebSocket.ts
 │       │   ├── useTranscription.ts
 │       │   ├── useDictation.ts
 │       │   └── useTauriShortcuts.ts
 │       ├── lib/
-│       │   ├── api.ts           # REST client to backend
+│       │   ├── api.ts           # REST client to backend (sessions, search, config)
 │       │   ├── tauri.ts         # Tauri IPC bridge
 │       │   ├── constants.ts
 │       │   └── utils.ts         # cn() helper (clsx + tailwind-merge)
 │       └── pages/
 │           ├── TranscriptionPage.tsx
-│           ├── SessionListPage.tsx
+│           ├── SessionListPage.tsx   # Session list with search/filter bar
 │           ├── SessionDetailPage.tsx
+│           ├── SettingsPage.tsx
 │           └── OverlayPage.tsx
 │
 └── src-tauri/                   # Tauri v2 (Rust)
@@ -148,7 +155,7 @@ voice-to-speech-local/
 - **Language**: All code, comments, commit messages, and documentation in **English**.
 - **Frontend imports**: Use `@/` path alias (e.g., `import { cn } from "@/lib/utils"`).
 - **UI components**: Use shadcn/ui. Primitives live in `frontend/src/components/ui/`.
-- **Backend structure**: Domain modules (`audio/`, `transcription/`, `storage/`, `api/`), each with `__init__.py`.
+- **Backend structure**: Domain modules (`audio/`, `transcription/`, `storage/`, `search/`, `api/`), each with `__init__.py`.
 - **Config access**: Always through Pydantic models in `backend/src/config.py`, never raw YAML parsing.
 - **Tauri v2**: `app.title` does NOT exist — window title goes in `app.windows[].title` only.
 - **Tauri windows**: Two windows defined — `main` (900x700, resizable) and `overlay` (100x36, transparent, always-on-top, click-through).
@@ -174,7 +181,11 @@ Prerequisites:
 ## Current State
 
 - **Phase 1** (Foundations): Completed — Tauri + React + FastAPI scaffold, config loading, audio capture, overlay, system tray, global shortcuts, dictation mode.
-- **Phase 2** (Transcription mode): In progress — WebSocket frontend<->backend, React UI, SQLite storage.
+- **Phase 2** (Transcription mode): Completed — WebSocket frontend<->backend, React UI, SQLite storage.
+- **Phase 3** (Dictation + overlay): Completed — Text injection, overlay window, dictation mode.
+- **Phase 4.1** (Robustness & Tests): Completed — Error handling, backend tests.
+- **Phase 4.2** (Settings page): Completed — GET/PUT /api/config, GET /api/audio/devices, SettingsPage with hot-reload.
+- **Phase 4.3** (Session UX + Search): Completed — AlertDialog delete, optimistic delete with animation, toast notifications, ChromaDB semantic search, metadata filters (language, mode, date, duration), search endpoint, auto-backfill.
 - See `prd.md` for full roadmap and feature backlog.
 
 ## Data Model (SQLite)
@@ -182,6 +193,17 @@ Prerequisites:
 Two main tables:
 - `sessions`: id, mode ('dictation'|'transcription'), language, started_at, ended_at, duration_s, summary (V2)
 - `segments`: id, session_id (FK), text, start_ms, end_ms, confidence
+
+## Semantic Search (ChromaDB)
+
+- **Storage**: `./data/chroma/` directory (sibling to SQLite `sessions.db`)
+- **Collection**: `sessions` — one document per session containing full concatenated text
+- **Metadata per document**: session_id, language, mode, duration_s, started_at
+- **Embedding model**: `all-MiniLM-L6-v2` (384-dim, downloaded to `~/.cache/chroma/` on first use, ~80MB)
+- **Indexing**: Automatic on session end (in `ws.py`), deleted on session removal (in `routes.py`)
+- **Backfill**: Auto-indexes existing sessions on first startup if ChromaDB collection is empty
+- **API**: `GET /api/sessions/search?q=...&language=...&mode=...&date_from=...&date_to=...&duration_min=...&duration_max=...`
+- **Graceful degradation**: If ChromaDB init fails, search falls back to SQL-only filtering
 
 ## Key Ports
 

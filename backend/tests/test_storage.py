@@ -130,3 +130,77 @@ async def test_list_sessions_pagination(repo):
 
     page3 = await repo.list_sessions(limit=2, offset=4)
     assert len(page3) == 1
+
+
+# ── filter_sessions tests ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_filter_sessions_by_language(repo):
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+    await repo.create_session("transcription", "en", now)
+    await repo.create_session("dictation", "fr", now)
+
+    results = await repo.filter_sessions(language="fr")
+    assert len(results) == 2
+    assert all(s.language == "fr" for s in results)
+
+
+@pytest.mark.asyncio
+async def test_filter_sessions_by_mode(repo):
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+    await repo.create_session("dictation", "en", now)
+
+    results = await repo.filter_sessions(mode="dictation")
+    assert len(results) == 1
+    assert results[0].mode == "dictation"
+
+
+@pytest.mark.asyncio
+async def test_filter_sessions_by_duration_range(repo):
+    now = datetime.now(timezone.utc)
+    s1 = await repo.create_session("transcription", "fr", now)
+    await repo.end_session(s1, now, 5.0)
+    s2 = await repo.create_session("transcription", "fr", now)
+    await repo.end_session(s2, now, 15.0)
+    s3 = await repo.create_session("transcription", "fr", now)
+    await repo.end_session(s3, now, 60.0)
+
+    results = await repo.filter_sessions(duration_min=10.0, duration_max=30.0)
+    assert len(results) == 1
+    assert results[0].duration_s == 15.0
+
+
+@pytest.mark.asyncio
+async def test_filter_sessions_by_ids(repo):
+    now = datetime.now(timezone.utc)
+    id1 = await repo.create_session("transcription", "fr", now)
+    await repo.create_session("transcription", "en", now)
+    id3 = await repo.create_session("dictation", "fr", now)
+
+    results = await repo.filter_sessions(session_ids=[id3, id1])
+    assert len(results) == 2
+    # Should preserve order from session_ids
+    assert results[0].id == id3
+    assert results[1].id == id1
+
+
+@pytest.mark.asyncio
+async def test_filter_sessions_empty_ids(repo):
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+
+    results = await repo.filter_sessions(session_ids=[])
+    assert len(results) == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_sessions_no_filters(repo):
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+    await repo.create_session("dictation", "en", now)
+
+    results = await repo.filter_sessions()
+    assert len(results) == 2

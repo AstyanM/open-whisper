@@ -11,6 +11,9 @@ from src.config import load_config, AppConfig
 from src.api.routes import router as api_router
 from src.api.ws import ws_router
 from src.storage.database import init_db, close_db, set_db
+from src.storage.repository import SessionRepository
+from src.search.vector_store import init_vector_store, close_vector_store, get_collection
+from src.search.backfill import backfill_index
 from src.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
@@ -44,8 +47,20 @@ async def lifespan(app: FastAPI):
     set_db(db)
     logger.info("Database initialized")
 
+    try:
+        await init_vector_store(config.storage.db_path)
+        collection = get_collection()
+        if collection.count() == 0:
+            repo = SessionRepository(db)
+            count = await backfill_index(repo)
+            if count:
+                logger.info(f"Backfilled {count} sessions into ChromaDB")
+    except Exception as e:
+        logger.warning(f"ChromaDB initialization failed (search disabled): {e}")
+
     yield
 
+    await close_vector_store()
     await close_db(db)
     logger.info("Shutting down backend")
 

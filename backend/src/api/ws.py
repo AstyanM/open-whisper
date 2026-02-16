@@ -21,6 +21,7 @@ from src.exceptions import (
 from src.transcription.client import VLLMRealtimeClient
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
+from src.search.vector_store import index_session
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +236,20 @@ async def _handle_transcription_session(
                 "start_ms": 0,
                 "end_ms": int(duration_s * 1000),
             })
+
+        # Index in ChromaDB for semantic search
+        if full_text.strip():
+            try:
+                await index_session(
+                    session_id=session_id,
+                    full_text=full_text.strip(),
+                    language=language,
+                    mode=mode,
+                    duration_s=round(duration_s, 2),
+                    started_at=started_at.isoformat(),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to index session {session_id}: {e}")
 
         await _send_ws_json(websocket, {
             "type": "session_ended",

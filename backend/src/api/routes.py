@@ -11,6 +11,7 @@ from src.audio.capture import AudioCapture
 from src.config import AppConfig, find_config_path
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
+from src.search.vector_store import delete_session_embedding, search_sessions as chroma_search
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +213,73 @@ async def list_sessions(limit: int = 50, offset: int = 0):
     }
 
 
+def _session_to_dict(s) -> dict:
+    return {
+        "id": s.id,
+        "mode": s.mode,
+        "language": s.language,
+        "started_at": s.started_at,
+        "ended_at": s.ended_at,
+        "duration_s": s.duration_s,
+        "created_at": s.created_at,
+    }
+
+
+@router.get("/api/sessions/search")
+async def search_sessions_endpoint(
+    q: str = "",
+    language: str | None = None,
+    mode: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    duration_min: float | None = None,
+    duration_max: float | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Search sessions with optional semantic query and metadata filters."""
+    repo = _get_repo()
+    session_ids = None
+
+    if q.strip():
+        # Build ChromaDB where clause for metadata pre-filtering
+        where_clauses = []
+        if language:
+            where_clauses.append({"language": language})
+        if mode:
+            where_clauses.append({"mode": mode})
+
+        chroma_where = None
+        if len(where_clauses) == 1:
+            chroma_where = where_clauses[0]
+        elif len(where_clauses) > 1:
+            chroma_where = {"$and": where_clauses}
+
+        try:
+            session_ids = await chroma_search(
+                query=q.strip(),
+                n_results=limit + offset,
+                where=chroma_where,
+            )
+        except Exception as e:
+            logger.warning(f"ChromaDB search failed, falling back to SQL: {e}")
+            session_ids = None
+
+    sessions = await repo.filter_sessions(
+        session_ids=session_ids,
+        language=language if session_ids is None else None,  # Already filtered in ChromaDB
+        mode=mode if session_ids is None else None,
+        date_from=date_from,
+        date_to=date_to,
+        duration_min=duration_min,
+        duration_max=duration_max,
+        limit=limit,
+        offset=offset,
+    )
+
+    return {"sessions": [_session_to_dict(s) for s in sessions]}
+
+
 @router.get("/api/sessions/{session_id}")
 async def get_session(session_id: int):
     """Get a session with its segments."""
@@ -252,4 +320,8 @@ async def delete_session(session_id: int):
     deleted = await repo.delete_session(session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        await delete_session_embedding(session_id)
+    except Exception:
+        pass  # Non-fatal
     return {"deleted": True, "session_id": session_id}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Copy, Check, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { DeleteSessionDialog } from "@/components/DeleteSessionDialog";
 import { fetchSession, deleteSession } from "@/lib/api";
 import { LANGUAGES } from "@/lib/constants";
 import type { SessionDetail } from "@/lib/api";
@@ -66,9 +68,14 @@ export function SessionDetailPage() {
   }, [id]);
 
   async function handleDelete() {
-    if (!data || !window.confirm("Delete this session?")) return;
-    await deleteSession(data.session.id);
-    navigate("/sessions");
+    if (!data) return;
+    try {
+      await deleteSession(data.session.id);
+      toast.success("Session deleted");
+      navigate("/sessions");
+    } catch {
+      toast.error("Failed to delete session");
+    }
   }
 
   async function handleCopy() {
@@ -127,9 +134,7 @@ export function SessionDetailPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Sessions
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={handleDelete}>
-          <Trash2 className="h-4 w-4 text-muted-foreground" />
-        </Button>
+        <DeleteSessionDialog onConfirm={handleDelete} />
       </div>
 
       {/* Metadata */}

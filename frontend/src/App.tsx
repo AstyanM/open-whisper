@@ -6,10 +6,12 @@ import { SessionListPage } from "@/pages/SessionListPage";
 import { SessionDetailPage } from "@/pages/SessionDetailPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { OverlayPage } from "@/pages/OverlayPage";
+import { Toaster } from "@/components/ui/sonner";
 
 function App() {
   return (
     <BrowserRouter>
+      <Toaster />
       <Routes>
         <Route path="/overlay" element={<OverlayPage />} />
         <Route

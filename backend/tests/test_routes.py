@@ -223,3 +223,67 @@ async def test_list_audio_devices(client):
     assert "devices" in data
     assert len(data["devices"]) == 1
     assert data["devices"][0]["name"] == "Test Mic"
+
+
+# ── GET /api/sessions/search tests ────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_search_sessions_no_query(client, db):
+    """Search without query returns all sessions (like list)."""
+    repo = SessionRepository(db)
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+    await repo.create_session("dictation", "en", now)
+
+    resp = await client.get("/api/sessions/search")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["sessions"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_search_sessions_filter_by_language(client, db):
+    """Search with language filter returns only matching sessions."""
+    repo = SessionRepository(db)
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+    await repo.create_session("transcription", "en", now)
+
+    resp = await client.get("/api/sessions/search?language=fr")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["sessions"]) == 1
+    assert data["sessions"][0]["language"] == "fr"
+
+
+@pytest.mark.asyncio
+async def test_search_sessions_filter_by_mode(client, db):
+    """Search with mode filter returns only matching sessions."""
+    repo = SessionRepository(db)
+    now = datetime.now(timezone.utc)
+    await repo.create_session("transcription", "fr", now)
+    await repo.create_session("dictation", "en", now)
+
+    resp = await client.get("/api/sessions/search?mode=dictation")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["sessions"]) == 1
+    assert data["sessions"][0]["mode"] == "dictation"
+
+
+@pytest.mark.asyncio
+async def test_search_sessions_filter_by_duration(client, db):
+    """Search with duration filter returns only matching sessions."""
+    repo = SessionRepository(db)
+    now = datetime.now(timezone.utc)
+    s1 = await repo.create_session("transcription", "fr", now)
+    await repo.end_session(s1, now, 5.0)
+    s2 = await repo.create_session("transcription", "fr", now)
+    await repo.end_session(s2, now, 120.0)
+
+    resp = await client.get("/api/sessions/search?duration_min=60")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["sessions"]) == 1
+    assert data["sessions"][0]["duration_s"] == 120.0

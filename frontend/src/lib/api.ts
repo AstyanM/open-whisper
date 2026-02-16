@@ -65,6 +65,35 @@ export async function deleteSession(id: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete session");
 }
 
+export interface SearchFilters {
+  q?: string;
+  language?: string;
+  mode?: string;
+  date_from?: string;
+  date_to?: string;
+  duration_min?: number;
+  duration_max?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export async function searchSessions(
+  filters: SearchFilters,
+): Promise<SessionSummary[]> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value != null && value !== "") {
+      params.set(key, String(value));
+    }
+  }
+  const res = await fetch(
+    `${BACKEND_URL}/api/sessions/search?${params}`,
+  );
+  if (!res.ok) throw new Error("Failed to search sessions");
+  const data = await res.json();
+  return data.sessions;
+}
+
 // ── Config types ───────────────────────────────────────────────────
 
 export interface ShortcutsConfig {
