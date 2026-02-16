@@ -7,6 +7,7 @@ export interface SessionSummary {
   started_at: string;
   ended_at: string | null;
   duration_s: number | null;
+  summary?: string | null;
   created_at: string;
   preview?: string;
 }
@@ -32,6 +33,7 @@ export interface HealthResponse {
     database?: { status: string; message?: string };
     transcription?: { status: string; engine?: string; model?: string; device?: string; loaded?: boolean; message?: string };
     audio?: { status: string; input_devices?: number; message?: string };
+    llm?: { status: string; api_url?: string; model?: string };
   };
 }
 
@@ -117,8 +119,19 @@ export interface TranscriptionModelConfig {
   post_roll_ms: number;
 }
 
+export interface LLMConfig {
+  enabled: boolean;
+  api_url: string;
+  api_key: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  auto_summarize: boolean;
+}
+
 export interface ModelsConfig {
   transcription: TranscriptionModelConfig;
+  llm: LLMConfig;
 }
 
 export interface AudioConfig {
@@ -198,4 +211,35 @@ export async function fetchAudioDevices(): Promise<AudioDevice[]> {
   if (!res.ok) throw new Error("Failed to fetch audio devices");
   const data = await res.json();
   return data.devices;
+}
+
+// ── LLM API ───────────────────────────────────────────────────────
+
+export async function summarizeSession(
+  id: number,
+): Promise<{ session_id: number; summary: string }> {
+  const res = await fetch(`${BACKEND_URL}/api/sessions/${id}/summarize`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Summarization failed" }));
+    throw new Error(err.detail ?? "Summarization failed");
+  }
+  return res.json();
+}
+
+export async function rewriteText(
+  text: string,
+  instruction?: string,
+): Promise<{ original: string; rewritten: string }> {
+  const res = await fetch(`${BACKEND_URL}/api/llm/rewrite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, instruction }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Rewrite failed" }));
+    throw new Error(err.detail ?? "Rewrite failed");
+  }
+  return res.json();
 }

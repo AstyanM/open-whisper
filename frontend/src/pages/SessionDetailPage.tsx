@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ChevronRight, Copy, Check, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, Check, RefreshCw, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DeleteSessionDialog } from "@/components/DeleteSessionDialog";
-import { fetchSession, deleteSession } from "@/lib/api";
+import { fetchSession, deleteSession, summarizeSession } from "@/lib/api";
 import {
   formatDuration,
   formatDateLong,
@@ -36,6 +36,7 @@ export function SessionDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -60,6 +61,28 @@ export function SessionDetailPage() {
       navigate("/sessions");
     } catch {
       toast.error("Failed to delete session");
+    }
+  }
+
+  async function handleSummarize() {
+    if (!data) return;
+    setSummarizing(true);
+    try {
+      const result = await summarizeSession(data.session.id);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              session: { ...prev.session, summary: result.summary },
+            }
+          : prev,
+      );
+      toast.success("Summary generated");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to generate summary";
+      toast.error(msg);
+    } finally {
+      setSummarizing(false);
     }
   }
 
@@ -183,6 +206,40 @@ export function SessionDetailPage() {
           {formatDateLong(session.started_at)}
         </span>
       </div>
+
+      {/* Summary */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            Summary
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSummarize}
+            disabled={summarizing || !full_text}
+          >
+            {summarizing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            {session.summary ? "Regenerate" : "Generate"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {session.summary ? (
+            <p className="text-sm leading-relaxed">{session.summary}</p>
+          ) : (
+            <p className="text-sm italic text-muted-foreground">
+              {summarizing
+                ? "Generating summary..."
+                : "No summary yet. Click Generate to create one."}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Full text */}
       <Card>

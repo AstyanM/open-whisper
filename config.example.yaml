@@ -27,6 +27,17 @@ models:
     end_padding_ms: 300         # Silence appended before transcription to avoid truncation (0-1000)
     post_roll_ms: 1200          # Extra audio capture after stop to avoid cutting last words (0-5000)
 
+  # LLM post-processing (summarization, text rewriting)
+  # Uses any OpenAI-compatible API (Ollama, LM Studio, vLLM, cloud providers)
+  llm:
+    enabled: false                          # Set to true to enable LLM features
+    api_url: "http://localhost:11434/v1"    # Ollama default endpoint
+    api_key: "ollama"                       # API key ('ollama' for local, real key for cloud)
+    model: "mistral:7b"                     # Model name (must be pulled in Ollama first)
+    temperature: 0.3                        # Lower = more deterministic
+    max_tokens: 512                         # Max output tokens for summary/rewrite
+    auto_summarize: true                    # Auto-generate summary after each session
+
 # Audio capture settings
 audio:
   sample_rate: 16000          # Sample rate in Hz (16kHz for Whisper)

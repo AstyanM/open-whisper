@@ -40,3 +40,9 @@ class DatabaseError(VTSError):
     """Database operation failed."""
 
     code = "database_error"
+
+
+class LLMError(VTSError):
+    """LLM inference or connection error."""
+
+    code = "llm_error"

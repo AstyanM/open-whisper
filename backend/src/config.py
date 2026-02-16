@@ -62,10 +62,63 @@ class TranscriptionModelConfig(BaseModel):
         le=5000,
         description="Extra audio capture (ms) after stop to avoid cutting last words",
     )
+    repetition_penalty: float = Field(
+        default=1.15,
+        ge=1.0,
+        le=2.0,
+        description="Penalizes repeated tokens to prevent hallucination loops (1.0 = disabled)",
+    )
+    no_repeat_ngram_size: int = Field(
+        default=4,
+        ge=0,
+        le=10,
+        description="Prevents repeating any N-gram of this size (0 = disabled)",
+    )
+    compression_ratio_threshold: float = Field(
+        default=2.4,
+        ge=0.0,
+        le=10.0,
+        description="Discard segments with compression ratio above this threshold (hallucination indicator)",
+    )
+    log_prob_threshold: float = Field(
+        default=-1.0,
+        ge=-5.0,
+        le=0.0,
+        description="Discard segments with average log probability below this threshold",
+    )
+    hallucination_max_repeats: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Max times a phrase can repeat before the chunk is considered hallucinated",
+    )
 
+
+
+class LLMConfig(BaseModel):
+    enabled: bool = Field(default=False, description="Enable LLM post-processing (summarize, rewrite)")
+    api_url: str = Field(
+        default="http://localhost:11434/v1",
+        description="OpenAI-compatible API base URL (Ollama default)",
+    )
+    api_key: str = Field(
+        default="ollama",
+        description="API key ('ollama' for local Ollama, real key for cloud providers)",
+    )
+    model: str = Field(
+        default="mistral:7b",
+        description="Model name for LLM completions",
+    )
+    temperature: float = Field(default=0.3, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=512, ge=64, le=4096)
+    auto_summarize: bool = Field(
+        default=True,
+        description="Automatically generate summary after each transcription session",
+    )
 
 class ModelsConfig(BaseModel):
     transcription: TranscriptionModelConfig = TranscriptionModelConfig()
+    llm: LLMConfig = LLMConfig()
 
 
 class AudioConfig(BaseModel):

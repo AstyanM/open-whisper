@@ -10,6 +10,7 @@ from src.config import AppConfig, find_config_path
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
 from src.search.vector_store import delete_session_embedding, search_sessions as chroma_search
+from src.llm.client import is_llm_available, summarize_text, rewrite_text, get_llm_config
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,17 @@ async def health_check():
         if overall == "healthy":
             overall = "degraded"
 
+    # LLM check
+    if is_llm_available():
+        llm_cfg = get_llm_config()
+        checks["llm"] = {
+            "status": "ok",
+            "api_url": llm_cfg.api_url if llm_cfg else "unknown",
+            "model": llm_cfg.model if llm_cfg else "unknown",
+        }
+    else:
+        checks["llm"] = {"status": "disabled"}
+
     return {"status": overall, "service": "openwhisper-backend", "checks": checks}
 
 
@@ -103,6 +115,7 @@ _HOT_RELOAD_PREFIXES = (
     "models.transcription.model_size",
     "models.transcription.device",
     "models.transcription.compute_type",
+    "models.llm",
 )
 # Fields that require an application restart
 _RESTART_REQUIRED_PREFIXES = (
@@ -185,6 +198,12 @@ async def update_config(request: Request):
     # Update in-memory config
     src.main.config = new_config
 
+    # Re-initialize LLM client if config changed
+    if any(p.startswith("models.llm") for p in changed):
+        from src.llm.client import init_llm_client, close_llm_client
+        close_llm_client()
+        init_llm_client(new_config.models.llm)
+
     return {"status": "ok", "applied": applied, "restart_required": restart_required}
 
 
@@ -223,6 +242,7 @@ def _session_to_dict(s, preview: str | None = None) -> dict:
         "started_at": s.started_at,
         "ended_at": s.ended_at,
         "duration_s": s.duration_s,
+        "summary": s.summary,
         "created_at": s.created_at,
     }
     if preview is not None:
@@ -303,6 +323,7 @@ async def get_session(session_id: int):
             "started_at": session.started_at,
             "ended_at": session.ended_at,
             "duration_s": session.duration_s,
+            "summary": session.summary,
             "created_at": session.created_at,
         },
         "segments": [
@@ -317,6 +338,53 @@ async def get_session(session_id: int):
         ],
         "full_text": await repo.get_session_full_text(session_id),
     }
+
+
+@router.post("/api/sessions/{session_id}/summarize")
+async def summarize_session(session_id: int):
+    """Generate or regenerate a summary for a session using LLM."""
+    if not is_llm_available():
+        raise HTTPException(status_code=503, detail="LLM not configured or disabled")
+
+    repo = _get_repo()
+    session = await repo.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    full_text = await repo.get_session_full_text(session_id)
+    if not full_text or not full_text.strip():
+        raise HTTPException(status_code=400, detail="Session has no text to summarize")
+
+    try:
+        summary = await summarize_text(full_text)
+    except Exception as e:
+        logger.error(f"LLM summarization failed for session {session_id}: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+
+    await repo.update_session_summary(session_id, summary)
+    return {"session_id": session_id, "summary": summary}
+
+
+@router.post("/api/llm/rewrite")
+async def rewrite_text_endpoint(request: Request):
+    """Rewrite/clean up arbitrary text using LLM."""
+    if not is_llm_available():
+        raise HTTPException(status_code=503, detail="LLM not configured or disabled")
+
+    body = await request.json()
+    text = body.get("text", "")
+    instruction = body.get("instruction")
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="No text provided")
+
+    try:
+        result = await rewrite_text(text, instruction)
+    except Exception as e:
+        logger.error(f"LLM rewrite failed: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+
+    return {"original": text, "rewritten": result}
 
 
 @router.delete("/api/sessions/{session_id}")

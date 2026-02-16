@@ -15,6 +15,7 @@ from src.storage.database import init_db, close_db, set_db
 from src.storage.repository import SessionRepository
 from src.search.vector_store import init_vector_store, close_vector_store, get_collection
 from src.search.backfill import backfill_index
+from src.llm.client import init_llm_client, close_llm_client
 from src.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ def _configure_logging():
     root.handlers.clear()
     root.addHandler(handler)
     # Explicitly set our package loggers
-    for name in ("src", "src.api.ws", "src.transcription.whisper_client", "src.audio.capture"):
+    for name in ("src", "src.api.ws", "src.transcription.whisper_client", "src.audio.capture", "src.llm.client"):
         logging.getLogger(name).setLevel(logging.INFO)
 
 
@@ -78,8 +79,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"ChromaDB initialization failed (search disabled): {e}")
 
+    # Initialize LLM client (non-fatal if it fails)
+    try:
+        init_llm_client(config.models.llm)
+    except Exception as e:
+        logger.warning(f"LLM client initialization failed (summarization disabled): {e}")
+
     yield
 
+    close_llm_client()
     await close_vector_store()
     await close_db(db)
     logger.info("Shutting down backend")

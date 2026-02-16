@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, FileText, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, FileText, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -249,11 +249,16 @@ export function SessionListPage() {
                           {formatDate(s.started_at)}
                         </TooltipContent>
                       </Tooltip>
-                      {s.preview && (
+                      {s.summary ? (
+                        <p className="truncate text-xs text-amber-600/70 dark:text-amber-400/70 flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 shrink-0" />
+                          {s.summary}
+                        </p>
+                      ) : s.preview ? (
                         <p className="truncate text-xs text-muted-foreground/70">
                           {s.preview}
                         </p>
-                      )}
+                      ) : null}
                     </div>
                     <div onClick={(e) => e.stopPropagation()}>
                       <DeleteSessionDialog

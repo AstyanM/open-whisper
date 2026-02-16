@@ -67,6 +67,17 @@ class SessionRepository:
         except aiosqlite.Error as e:
             raise DatabaseError(f"Failed to end session {session_id}: {e}") from e
 
+    async def update_session_summary(self, session_id: int, summary: str) -> None:
+        """Update a session's summary field."""
+        try:
+            await self.db.execute(
+                "UPDATE sessions SET summary = ? WHERE id = ?",
+                (summary, session_id),
+            )
+            await self.db.commit()
+        except aiosqlite.Error as e:
+            raise DatabaseError(f"Failed to update summary for session {session_id}: {e}") from e
+
     async def get_session(self, session_id: int) -> SessionRow | None:
         """Get a single session by id."""
         try:

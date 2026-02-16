@@ -23,6 +23,7 @@ from src.exceptions import (
 from src.transcription.whisper_client import WhisperClient
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
+from src.llm.client import is_llm_available, summarize_text
 from src.search.vector_store import index_session
 
 logger = logging.getLogger(__name__)
@@ -340,6 +341,18 @@ async def _handle_transcription_session(
             f"Session {session_id} ended: {duration_s:.1f}s, "
             f"{len(full_text)} chars"
         )
+
+        # Auto-summarize in background (non-blocking)
+        if full_text.strip() and is_llm_available():
+            try:
+                from src.main import config as app_config
+                if app_config and app_config.models.llm.auto_summarize:
+                    asyncio.create_task(
+                        _auto_summarize(session_id, full_text.strip(), repo)
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to launch auto-summary for session {session_id}: {e}")
+
     except DatabaseError as e:
         _debug(f"[WS] Failed to finalize session {session_id}: {e}")
         logger.error(f"Failed to finalize session {session_id}: {e}")
@@ -347,6 +360,17 @@ async def _handle_transcription_session(
     except Exception as e:
         _debug(f"[WS] Failed to finalize session {session_id}: {e}")
         logger.error(f"Failed to finalize session {session_id}: {e}", exc_info=True)
+
+
+async def _auto_summarize(session_id: int, text: str, repo: SessionRepository) -> None:
+    """Background task: generate and save a summary for a session."""
+    try:
+        summary = await summarize_text(text)
+        if summary:
+            await repo.update_session_summary(session_id, summary)
+            logger.info(f"Auto-summary generated for session {session_id} ({len(summary)} chars)")
+    except Exception as e:
+        logger.warning(f"Auto-summary failed for session {session_id}: {e}")
 
 
 @ws_router.websocket("/ws/mic-test")
