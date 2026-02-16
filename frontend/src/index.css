@@ -185,6 +185,30 @@
   }
 }
 
+/* ── Overlay animations ──────────────────────────────── */
+@keyframes overlay-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.5); opacity: 0.15; }
+}
+
+@keyframes overlay-idle-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes overlay-bar-1 { 0%, 100% { height: 25%; } 50% { height: 100%; } }
+@keyframes overlay-bar-2 { 0%, 100% { height: 60%; } 50% { height: 25%; } }
+@keyframes overlay-bar-3 { 0%, 100% { height: 35%; } 50% { height: 85%; } }
+@keyframes overlay-bar-4 { 0%, 100% { height: 75%; } 50% { height: 40%; } }
+
+@utility animate-breathe {
+  animation: overlay-breathe 2s ease-in-out infinite;
+}
+
+@utility animate-idle-pulse {
+  animation: overlay-idle-pulse 4s ease-in-out infinite;
+}
+
 /* Thin scrollbar styling */
 * {
   scrollbar-width: thin;

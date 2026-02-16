@@ -23,10 +23,11 @@
         "label": "overlay",
         "title": "",
         "url": "/overlay",
-        "width": 100,
-        "height": 36,
+        "width": 160,
+        "height": 56,
         "resizable": false,
         "decorations": false,
+        "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "focus": false
