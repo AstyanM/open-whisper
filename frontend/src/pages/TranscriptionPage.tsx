@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Mic, Square, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,69 +5,20 @@ import { Separator } from "@/components/ui/separator";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { TranscriptionView } from "@/components/TranscriptionView";
-import { useTranscription } from "@/hooks/useTranscription";
-import { useDictation } from "@/hooks/useDictation";
-import { useTauriShortcuts } from "@/hooks/useTauriShortcuts";
-import { emitEvent, listenEvent } from "@/lib/tauri";
-import { DEFAULT_LANGUAGE } from "@/lib/constants";
+import { useTranscriptionContext } from "@/contexts/TranscriptionContext";
 
 export function TranscriptionPage() {
-  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
-  const { state, start, stop, liveText, error, elapsedMs } =
-    useTranscription();
-  const dictation = useDictation();
+  const {
+    language,
+    setLanguage,
+    transcription,
+    dictation,
+    isTranscribing,
+    isDictating,
+    isActive,
+  } = useTranscriptionContext();
 
-  const isTranscribing = state !== "idle" && state !== "error";
-  const isDictating = dictation.state !== "idle" && dictation.state !== "error";
-  const isActive = isTranscribing || isDictating;
-
-  useTauriShortcuts({
-    onToggleDictation: () => dictation.toggle(language),
-    onToggleTranscription: () => {
-      if (isTranscribing) {
-        stop();
-      } else {
-        start(language);
-      }
-    },
-  });
-
-  // Sync language from tray menu
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listenEvent<string>("tray:language-changed", (code) => {
-      if (!isActive) setLanguage(code);
-    }).then((fn) => (unlisten = fn));
-    return () => unlisten?.();
-  }, [isActive]);
-
-  // Notify tray when language changes from UI
-  useEffect(() => {
-    emitEvent("language-changed", language);
-  }, [language]);
-
-  // Emit mic state to overlay window
-  useEffect(() => {
-    if (isDictating) {
-      emitEvent("mic-state-changed", {
-        state: dictation.state,
-        language,
-        mode: "dictation" as const,
-      });
-    } else if (isTranscribing) {
-      emitEvent("mic-state-changed", {
-        state,
-        language,
-        mode: "transcription" as const,
-      });
-    } else {
-      emitEvent("mic-state-changed", {
-        state: "idle" as const,
-        language,
-        mode: "none" as const,
-      });
-    }
-  }, [state, dictation.state, language, isDictating, isTranscribing]);
+  const { state, start, stop, liveText, error, elapsedMs } = transcription;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
