@@ -6,7 +6,7 @@
 ![Tauri](https://img.shields.io/badge/Tauri-v2-24c8db)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-Local, real-time voice transcription powered by **Voxtral Mini 4B Realtime** (Mistral AI) via vLLM.
+Local, real-time voice transcription powered by **faster-whisper** (OpenAI Whisper).
 Two modes — **dictation** (inject text at cursor) and **transcription** (dedicated window with timestamped history).
 Zero cloud dependency — all processing happens on-device.
 
@@ -22,18 +22,20 @@ OpenWhisper runs entirely on your machine: your audio never leaves your hardware
 | **Dictation** | `Ctrl+Shift+D` activates mic, transcribed text is injected at cursor in any app | Quick emails, notes, messages |
 | **Transcription** | `Ctrl+Shift+T` opens a dedicated window with real-time timestamps and session history | Meetings, calls, long-form notes |
 
-Both modes stream audio through a local vLLM server running Voxtral Mini 4B with AWQ quantization, keeping VRAM usage under 4 GB.
+Both modes stream audio to a local faster-whisper engine running directly in the Python backend. With CUDA, the `large-v3-turbo` model uses ~3 GB VRAM; the `small` model runs comfortably on CPU.
 
 ---
 
 ## Features
 
-- **Real-time streaming transcription** — 80 ms audio chunks streamed via WebSocket
+- **Real-time streaming transcription** — audio chunks streamed via WebSocket, transcribed with faster-whisper
 - **Dictation mode** — global shortcut injects text at cursor via Win32 SendInput
 - **Transcription mode** — timestamped segments, session history, SQLite storage
 - **Semantic search** — ChromaDB + all-MiniLM-L6-v2 embeddings for searching past sessions
 - **Always-on-top overlay** — transparent, click-through indicator (mic status, language, mode)
 - **System tray** — quick access menu, language switching
+- **Multiple Whisper model sizes** — tiny, base, small, medium, large-v3-turbo
+- **VAD filtering** — skip silent regions for faster processing
 - **13 languages** — fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko
 - **Dark / light theme** — warm stone + amber palette, automatic or manual toggle
 - **Fully configurable** — `config.yaml` with hot-reload for most settings
@@ -59,21 +61,17 @@ Both modes stream audio through a local vLLM server running Voxtral Mini 4B with
          │  Python Backend   │
          │    (FastAPI)      │
          │                   │
+         │  · faster-whisper │
+         │    (Whisper STT)  │
          │  · Audio capture  │
          │    (sounddevice)  │
          │  · SQLite storage │
          │  · ChromaDB search│
          │  · Config manager │
-         └─────────┬─────────┘
-                   │ WebSocket /v1/realtime (localhost:8000)
-         ┌─────────┴─────────┐
-         │    vLLM Server    │
-         │  Voxtral Mini 4B  │
-         │    (GPU, AWQ)     │
          └───────────────────┘
 ```
 
-**Only the vLLM layer requires a GPU** — the backend and frontend run on CPU.
+**No external server required** — faster-whisper runs inside the Python backend process. GPU (CUDA) is optional: it accelerates transcription but the app works on CPU too.
 
 ---
 
@@ -85,7 +83,7 @@ Both modes stream audio through a local vLLM server running Voxtral Mini 4B with
 | Frontend | React 19, Vite, TypeScript | Tailwind CSS v4, shadcn/ui, Radix UI, Lucide icons |
 | Backend | Python 3.13, FastAPI, uvicorn | Async, WebSocket-first, hot-reloadable config |
 | Audio | sounddevice (PortAudio) | 16 kHz mono, 80 ms chunks |
-| Transcription | vLLM + Voxtral Mini 4B | AWQ quantization, ~3.5 GB VRAM |
+| Transcription | faster-whisper (CTranslate2) | Whisper models (tiny → large-v3-turbo), CUDA or CPU |
 | Storage | SQLite (aiosqlite) | Sessions + timestamped segments |
 | Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, CPU inference |
 | Text injection | enigo 0.6 + arboard 3 | Win32 SendInput, clipboard fallback |
@@ -105,6 +103,7 @@ openwhisper/
 │   ├── src/
 │   │   ├── main.py              # Entry point
 │   │   ├── config.py            # Pydantic config loader
+│   │   ├── exceptions.py        # Custom exception classes
 │   │   ├── api/
 │   │   │   ├── routes.py        # REST endpoints
 │   │   │   └── ws.py            # WebSocket (audio streaming)
@@ -117,7 +116,7 @@ openwhisper/
 │   │   │   ├── database.py      # SQLite init + migrations
 │   │   │   └── repository.py    # CRUD for sessions & segments
 │   │   └── transcription/
-│   │       └── client.py        # WebSocket client to vLLM
+│   │       └── whisper_client.py  # faster-whisper integration
 │   └── tests/
 │
 ├── frontend/                    # React + Vite + Tailwind CSS
@@ -135,6 +134,7 @@ openwhisper/
     ├── tauri.conf.json
     └── src/
         ├── main.rs              # Entry point
+        ├── lib.rs               # Tauri setup, plugin registration
         ├── shortcuts.rs         # Global shortcut registration
         ├── tray.rs              # System tray
         └── injection.rs         # Text injection (enigo/SendInput)
@@ -147,15 +147,13 @@ openwhisper/
 | Requirement | Version |
 |-------------|---------|
 | **OS** | Windows 10/11 (64-bit) |
-| **GPU** | NVIDIA with >= 16 GB VRAM (RTX 4060 Ti 16 GB, RTX 4080/4090, RTX 3090, A4000+) |
-| **CUDA** | 12.x + cuDNN |
 | **Python** | 3.13+ |
 | **Node.js** | 20+ |
 | **Rust** | 1.75+ |
 | **uv** | Latest (Python package manager) |
-| **vLLM** | Latest (installed in WSL2) |
+| **GPU** *(optional)* | NVIDIA with CUDA 12.x for accelerated transcription |
 
-> **Note**: vLLM currently requires Linux. On Windows, run it inside **WSL2** (Ubuntu).
+> **Note**: A GPU is **not required**. faster-whisper runs on CPU (use `small` or `base` model for best CPU performance). With an NVIDIA GPU + CUDA, you can use `large-v3-turbo` for higher accuracy.
 
 ---
 
@@ -168,23 +166,7 @@ git clone https://github.com/AstyanM/openwhisper.git
 cd openwhisper
 ```
 
-### 2. Setup vLLM (WSL2 — one-time)
-
-```bash
-wsl
-python3 -m venv ~/voxtral-env
-source ~/voxtral-env/bin/activate
-pip install vllm
-
-# Download the model (disable Xet to avoid WSL2 crash)
-HF_HUB_DISABLE_XET=1 huggingface-cli download mistralai/Voxtral-Mini-4B-Realtime-2602
-
-# Create required symlink (Mistral uses non-standard weight filenames)
-cd ~/.cache/huggingface/hub/models--mistralai--Voxtral-Mini-4B-Realtime-2602/snapshots/*/
-ln -s consolidated.safetensors model.safetensors
-```
-
-### 3. Setup backend (Windows — one-time)
+### 2. Setup backend
 
 ```bash
 cd backend
@@ -192,39 +174,28 @@ uv venv .venv --python 3.13
 uv pip install -e ".[dev]"
 ```
 
-### 4. Setup frontend (Windows — one-time)
+The Whisper model is downloaded automatically on first startup.
+
+### 3. Setup frontend
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 5. Copy configuration
+### 4. Copy configuration
 
 ```bash
 cp config.example.yaml config.yaml
 ```
 
-Edit `config.yaml` to set your preferred language, audio device, and other options.
+Edit `config.yaml` to set your preferred language, model size, audio device, and other options.
 
 ---
 
 ## Usage
 
-### Start vLLM (WSL2 — each session)
-
-```bash
-wsl
-source ~/voxtral-env/bin/activate
-VLLM_DISABLE_COMPILE_CACHE=1 vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 \
-  --max-model-len 4096 \
-  --gpu-memory-utilization 0.80 \
-  --enforce-eager
-```
-
-Wait for `Uvicorn running on http://0.0.0.0:8000` before continuing.
-
-### Start the app (Windows)
+### Start the app
 
 Run two terminals:
 
@@ -260,15 +231,19 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `language` | `"fr"` | Transcription language (13 supported) |
+| `models.transcription.model_size` | `"small"` | Whisper model: `tiny`, `base`, `small`, `medium`, `large-v3-turbo` |
+| `models.transcription.device` | `"auto"` | Inference device: `auto`, `cuda`, `cpu` |
+| `models.transcription.compute_type` | `"auto"` | Precision: `auto`, `float16`, `int8`, `int8_float16` |
+| `models.transcription.beam_size` | `5` | 1 = greedy (fast), 5 = beam search (accurate) |
+| `models.transcription.vad_filter` | `true` | Skip silent regions (recommended) |
+| `models.transcription.buffer_duration_s` | `3.0` | Seconds of audio to buffer before transcribing (1–10) |
 | `audio.device` | `"default"` | Microphone input device name or index |
-| `audio.chunk_duration_ms` | `80` | Audio chunk size (80 ms = 1 Voxtral token) |
-| `models.transcription.delay_ms` | `480` | Streaming delay (80–2400 ms) |
-| `models.transcription.vllm_port` | `8000` | vLLM server port |
+| `audio.chunk_duration_ms` | `80` | Audio chunk size in ms |
 | `overlay.enabled` | `true` | Show overlay window |
 | `overlay.position` | `"top-right"` | Overlay screen position |
 | `backend.port` | `8001` | Backend API port |
 
-Most settings apply immediately via hot-reload. Changes to ports or model settings require a restart.
+Most settings apply immediately via hot-reload. Changes to model or port settings require a restart.
 
 ### Supported languages
 
@@ -303,13 +278,14 @@ Semantic search is powered by **ChromaDB** (stored in `./data/chroma/`), which a
 
 ## Roadmap
 
-- [x] **Phase 1** — Foundations (Tauri + React + FastAPI scaffold, audio capture, vLLM client)
+- [x] **Phase 1** — Foundations (Tauri + React + FastAPI scaffold, audio capture)
 - [x] **Phase 2** — Transcription mode (WebSocket streaming, React UI, SQLite storage)
 - [x] **Phase 3** — Dictation + overlay (text injection, overlay window, system tray)
 - [x] **Phase 4.1** — Robustness & tests (error handling, backend test suite)
 - [x] **Phase 4.2** — Settings page (REST config API, audio device picker, hot-reload)
 - [x] **Phase 4.3** — Session UX + search (ChromaDB, semantic search, filters, toasts)
 - [x] **Phase 4.4** — UI redesign (warm stone + amber palette, dark/light theme, new logo)
+- [x] **Phase 4.4b** — Switch from vLLM/Voxtral to faster-whisper (no external server needed)
 - [ ] **Phase 4.5** — Packaging & release (setup script, installer, GitHub release)
 - [ ] **Phase 5** — V2 features (auto-summary, export, speaker diarization, voice commands)
 

@@ -27,7 +27,17 @@ class TranscriptionModelConfig(BaseModel):
     compute_type: Literal["float16", "float32", "int8", "int8_float16", "auto"] = "auto"
     beam_size: int = Field(default=5, ge=1, le=20)
     vad_filter: bool = True
-    buffer_duration_s: float = Field(default=3.0, ge=1.0, le=10.0)
+    buffer_duration_s: float = Field(default=10.0, ge=1.0, le=30.0)
+    initial_prompt: str | None = Field(
+        default=None,
+        description="Prompt to prime the model (e.g. French text to avoid code-switching)",
+    )
+    overlap_duration_s: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=5.0,
+        description="Seconds of audio overlap between consecutive chunks",
+    )
 
 
 class ModelsConfig(BaseModel):

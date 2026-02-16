@@ -383,6 +383,7 @@ export function SettingsPage() {
                 <SelectItem value="small">Small (~2 GB)</SelectItem>
                 <SelectItem value="medium">Medium (~5 GB)</SelectItem>
                 <SelectItem value="large-v3-turbo">Large V3 Turbo (~6 GB)</SelectItem>
+                <SelectItem value="large-v3">Large V3 (~6 GB, slower but more accurate)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -494,7 +495,7 @@ export function SettingsPage() {
             </div>
             <Slider
               min={1}
-              max={10}
+              max={30}
               step={0.5}
               value={[draft.models.transcription.buffer_duration_s]}
               onValueChange={([v]) =>
@@ -502,6 +503,54 @@ export function SettingsPage() {
                   transcription: {
                     ...draft.models.transcription,
                     buffer_duration_s: v,
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Audio overlap</Label>
+                <p className="text-xs text-muted-foreground">
+                  Seconds of overlap between chunks to avoid cut words
+                </p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {draft.models.transcription.overlap_duration_s}s
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={5}
+              step={0.5}
+              value={[draft.models.transcription.overlap_duration_s]}
+              onValueChange={([v]) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    overlap_duration_s: v,
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Initial prompt</Label>
+            <p className="text-xs text-muted-foreground">
+              Prime the model with a text hint (e.g. French text to avoid
+              code-switching). Leave empty for automatic context chaining.
+            </p>
+            <Input
+              placeholder="e.g. Bonjour, ceci est une transcription en français."
+              value={draft.models.transcription.initial_prompt ?? ""}
+              onChange={(e) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    initial_prompt: e.target.value || null,
                   },
                 })
               }

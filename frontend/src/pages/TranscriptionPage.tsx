@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Mic, Square, Keyboard, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +7,7 @@ import { StatusIndicator } from "@/components/StatusIndicator";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { TranscriptionView } from "@/components/TranscriptionView";
 import { useTranscriptionContext } from "@/contexts/TranscriptionContext";
+import { fetchHealth } from "@/lib/api";
 
 export function TranscriptionPage() {
   const {
@@ -17,6 +19,27 @@ export function TranscriptionPage() {
     isDictating,
     isActive,
   } = useTranscriptionContext();
+
+  const [modelInfo, setModelInfo] = useState<{
+    engine: string;
+    model: string;
+    device: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetchHealth()
+      .then((data) => {
+        const t = data.checks.transcription;
+        if (t?.engine && t?.model) {
+          setModelInfo({
+            engine: t.engine,
+            model: t.model,
+            device: t.device ?? "unknown",
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const { state, start, resume, stop, liveText, error, elapsedMs, device } = transcription;
   const hasText = liveText.length > 0;
@@ -77,7 +100,12 @@ export function TranscriptionPage() {
       </div>
 
       {/* Transcription display */}
-      <TranscriptionView text={liveText} state={state} elapsedMs={elapsedMs} />
+      <TranscriptionView
+        text={liveText}
+        state={state}
+        elapsedMs={elapsedMs}
+        modelLabel={modelInfo ? `${modelInfo.engine} · ${modelInfo.model} · ${modelInfo.device}` : null}
+      />
 
       {/* Error display */}
       {(error || dictation.error) && (

@@ -177,10 +177,12 @@ class WhisperSession:
         self._audio_buffer = bytearray()
         self._delta_queue: asyncio.Queue[str | None] = asyncio.Queue()
         self._buffer_samples = int(sample_rate * config.buffer_duration_s)
+        self._overlap_bytes = int(sample_rate * config.overlap_duration_s) * 2  # 2 bytes per int16
         self._end_of_audio = asyncio.Event()
         self._cancelled = False
         self._transcription_task: asyncio.Task | None = None
         self._model: WhisperModel | None = None
+        self._previous_text: str = ""
 
     async def __aenter__(self) -> "WhisperSession":
         """Load model (if not cached) in a thread pool to avoid blocking."""
@@ -286,9 +288,14 @@ class WhisperSession:
                     logger.info("[Worker] No audio in buffer, exiting")
                     break
 
-                # Extract audio to transcribe
+                # Extract audio to transcribe, keeping overlap for next chunk
                 audio_bytes = bytes(self._audio_buffer)
-                self._audio_buffer.clear()
+                if self._overlap_bytes > 0 and not self._end_of_audio.is_set():
+                    # Keep the last overlap_duration_s of audio for context
+                    keep = min(self._overlap_bytes, len(self._audio_buffer))
+                    self._audio_buffer = bytearray(self._audio_buffer[-keep:])
+                else:
+                    self._audio_buffer.clear()
                 duration_s = len(audio_bytes) / 2 / self._sample_rate
 
                 _debug(f"[WHISPER] Transcribing chunk #{chunk_count}: {len(audio_bytes)} bytes ({duration_s:.1f}s audio)")
@@ -332,6 +339,7 @@ class WhisperSession:
 
                 if text.strip():
                     await self._delta_queue.put(text)
+                    self._previous_text = text.strip()
 
                 if self._end_of_audio.is_set() and len(self._audio_buffer) == 0:
                     _debug("[WHISPER] End of audio reached, no more data, exiting worker")
@@ -348,19 +356,27 @@ class WhisperSession:
 
     def _transcribe_chunk(self, audio: np.ndarray) -> str:
         """Run faster-whisper transcription on a float32 audio array. Sync."""
-        _debug(f"[WHISPER] _transcribe_chunk: {len(audio)/self._sample_rate:.1f}s audio, lang={self._language}, beam={self._config.beam_size}, vad={self._config.vad_filter}")
+        # Build prompt: previous text takes priority, then config initial_prompt
+        prompt = self._previous_text or self._config.initial_prompt or None
+        # Truncate to last ~200 chars to stay within Whisper's prompt token limit
+        if prompt and len(prompt) > 200:
+            prompt = prompt[-200:]
+
+        _debug(f"[WHISPER] _transcribe_chunk: {len(audio)/self._sample_rate:.1f}s audio, lang={self._language}, beam={self._config.beam_size}, vad={self._config.vad_filter}, prompt={repr(prompt[:60]) if prompt else None}")
         logger.info(
-            "[Transcribe] Starting (%.1fs audio, lang=%s, beam=%d, vad=%s)",
+            "[Transcribe] Starting (%.1fs audio, lang=%s, beam=%d, vad=%s, prompt=%s)",
             len(audio) / self._sample_rate,
             self._language,
             self._config.beam_size,
             self._config.vad_filter,
+            repr(prompt[:60]) if prompt else None,
         )
         segments, _info = self._model.transcribe(
             audio,
             language=self._language,
             beam_size=self._config.beam_size,
             vad_filter=self._config.vad_filter,
+            initial_prompt=prompt,
         )
         # Force-consume the generator (it's lazy)
         result_parts = []

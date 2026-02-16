@@ -29,7 +29,7 @@ export interface HealthResponse {
   service: string;
   checks: {
     database?: { status: string; message?: string };
-    transcription?: { status: string; engine?: string; model?: string; message?: string };
+    transcription?: { status: string; engine?: string; model?: string; device?: string; loaded?: boolean; message?: string };
     audio?: { status: string; input_devices?: number; message?: string };
   };
 }
@@ -108,6 +108,8 @@ export interface TranscriptionModelConfig {
   beam_size: number;
   vad_filter: boolean;
   buffer_duration_s: number;
+  initial_prompt: string | null;
+  overlap_duration_s: number;
 }
 
 export interface ModelsConfig {

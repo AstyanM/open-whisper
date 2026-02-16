@@ -9,6 +9,7 @@ interface TranscriptionViewProps {
   text: string;
   state: TranscriptionState;
   elapsedMs: number;
+  modelLabel?: string | null;
 }
 
 function formatDuration(ms: number): string {
@@ -22,6 +23,7 @@ export function TranscriptionView({
   text,
   state,
   elapsedMs,
+  modelLabel,
 }: TranscriptionViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -39,19 +41,25 @@ export function TranscriptionView({
   return (
     <Card
       className={cn(
+        "!py-0 !gap-0",
         isActive && "ring-2 ring-amber-500/20 glow-amber",
       )}
     >
       <CardContent className="p-0">
-        {showDuration && (
-          <div className="flex justify-end px-4 pt-3">
-            <Badge variant="secondary">{formatDuration(elapsedMs)}</Badge>
-          </div>
-        )}
         <div
           ref={scrollRef}
-          className="h-[400px] overflow-y-auto px-4 py-3"
+          className="h-[400px] overflow-y-auto px-4 pt-1.5 pb-3"
         >
+          {(modelLabel || showDuration) && (
+            <div className="mb-3 flex items-center justify-between">
+              {modelLabel ? (
+                <span className="font-mono text-xs text-muted-foreground/50">{modelLabel}</span>
+              ) : <span />}
+              {showDuration && (
+                <Badge variant="secondary">{formatDuration(elapsedMs)}</Badge>
+              )}
+            </div>
+          )}
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
             {text || (
               <span className="flex flex-col items-center justify-center gap-2 pt-32 text-muted-foreground italic">
@@ -61,7 +69,6 @@ export function TranscriptionView({
                   : "Waiting for speech..."}
               </span>
             )}
-
           </div>
         </div>
       </CardContent>

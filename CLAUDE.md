@@ -2,23 +2,21 @@
 
 ## Project Overview
 
-Local real-time voice transcription app powered by **Voxtral Mini 4B Realtime** (Mistral AI). Zero cloud dependency — all processing happens on-device. Two modes: **dictation** (inject text at cursor) and **transcription** (dedicated window with timestamped history).
+Local real-time voice transcription app powered by **faster-whisper** (OpenAI Whisper via CTranslate2). Zero cloud dependency — all processing happens on-device. Two modes: **dictation** (inject text at cursor) and **transcription** (dedicated window with timestamped history).
 
 ## Architecture
 
-Three-layer architecture communicating over localhost:
+Two-layer architecture communicating over localhost:
 
 ```
 Tauri v2 (Rust shell + React frontend)
     ↕ HTTP + WebSocket (localhost:8001)
-Python Backend (FastAPI)
-    ↕ WebSocket /v1/realtime (localhost:8000)
-vLLM Server (Voxtral Mini 4B, GPU)
+Python Backend (FastAPI + faster-whisper)
 ```
 
 - **Frontend** (`frontend/`): React 19 + Vite + Tailwind CSS v4 + shadcn/ui. Served by Tauri webview.
 - **Tauri** (`src-tauri/`): Rust shell — global shortcuts, text injection (enigo), overlay window, system tray, sidecar process management.
-- **Backend** (`backend/`): Python 3.13 + FastAPI — audio capture (sounddevice), WebSocket streaming, SQLite storage, ChromaDB semantic search, config loading.
+- **Backend** (`backend/`): Python 3.13 + FastAPI — audio capture (sounddevice), faster-whisper transcription, WebSocket streaming, SQLite storage, ChromaDB semantic search, config loading.
 - **Config**: `config.yaml` at project root, validated by Pydantic in `backend/src/config.py`.
 
 ## Tech Stack
@@ -30,7 +28,7 @@ vLLM Server (Voxtral Mini 4B, GPU)
 | UI | shadcn/ui, Tailwind CSS v4, Radix UI, Lucide icons | |
 | Backend | Python 3.13, FastAPI, uvicorn | Async, WebSocket-first |
 | Audio | sounddevice (PortAudio wrapper) | 16kHz mono, 80ms chunks |
-| Transcription | vLLM + Voxtral Mini 4B Realtime | AWQ quantization, GPU |
+| Transcription | faster-whisper (CTranslate2) | Whisper models (tiny → large-v3 / large-v3-turbo), CUDA or CPU |
 | Storage | SQLite via aiosqlite | Sessions + timestamped segments |
 | Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, local CPU |
 | Text injection | enigo 0.6 + arboard 3 (clipboard fallback) | Win32 SendInput |
@@ -55,6 +53,10 @@ npm run tauri dev
 npm run test:backend
 # equivalent to: cd backend && .venv\Scripts\python -m pytest tests/ -v
 
+# Frontend tests (vitest)
+cd frontend && npm test
+# or watch mode: cd frontend && npm run test:watch
+
 # Frontend lint
 cd frontend && npm run lint
 
@@ -74,6 +76,7 @@ uv pip install -e ".[dev]"
 - Build system: hatchling, packages = `["src"]`
 - Entry point: `python -m src.main`
 - Python version: 3.13 (requires-python >= 3.12)
+- Key dependency: `faster-whisper>=1.1.0` (Whisper model downloaded automatically on first run)
 
 ## Project Structure
 
@@ -103,7 +106,7 @@ openwhisper/
 │       │   ├── database.py      # SQLite init + migrations
 │       │   └── repository.py    # CRUD for sessions & segments
 │       └── transcription/
-│           └── client.py        # WebSocket client to vLLM
+│           └── whisper_client.py  # faster-whisper integration (WhisperClient + WhisperSession)
 │
 ├── frontend/                    # React + Vite
 │   ├── package.json
@@ -116,13 +119,20 @@ openwhisper/
 │       │   ├── TranscriptionView.tsx
 │       │   ├── StatusIndicator.tsx
 │       │   ├── LanguageSelector.tsx
+│       │   ├── BackendStatusBanner.tsx  # Backend health check banner
 │       │   ├── DeleteSessionDialog.tsx  # AlertDialog for session deletion
 │       │   ├── SessionSearchBar.tsx     # Search + filter bar (semantic + metadata)
+│       │   ├── MicTest.tsx              # Microphone test component
+│       │   ├── LogoMark.tsx             # Inline SVG logo component
+│       │   ├── ThemeProvider.tsx         # next-themes provider
+│       │   ├── ThemeToggle.tsx           # Dark/light mode toggle
 │       │   └── ui/              # shadcn/ui primitives (alert-dialog, sonner, ...)
 │       ├── hooks/
 │       │   ├── useWebSocket.ts
 │       │   ├── useTranscription.ts
 │       │   ├── useDictation.ts
+│       │   ├── useSettings.ts
+│       │   ├── useBackendHealth.ts
 │       │   └── useTauriShortcuts.ts
 │       ├── lib/
 │       │   ├── api.ts           # REST client to backend (sessions, search, config)
@@ -172,11 +182,21 @@ openwhisper/
 
 Prerequisites:
 - Windows 10/11 (64-bit)
-- NVIDIA GPU with >= 16 GB VRAM
 - MSVC 14.44.35207 (VS 2022 Community)
 - Windows SDK 10.0.26100.0
 - Node.js 20+, Python 3.13, Rust 1.75+
-- CUDA 12.x + cuDNN
+- GPU optional: NVIDIA with CUDA 12.x for accelerated transcription (faster-whisper works on CPU too)
+
+## Transcription Engine (faster-whisper)
+
+- **Library**: faster-whisper >= 1.1.0 (CTranslate2-based Whisper implementation)
+- **Model sizes**: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`
+- **Device**: `auto` (CUDA if available, else CPU), `cuda`, or `cpu`
+- **Compute type**: `auto`, `float16`, `int8`, `int8_float16`
+- **VAD**: Silero VAD filter to skip silent regions
+- **Buffer**: Configurable audio buffer (1–10 seconds) before transcription
+- **Architecture**: `WhisperClient` manages model lifecycle, `WhisperSession` handles per-session audio buffering and transcription streaming
+- **Model download**: Automatic on first use, cached in `~/.cache/huggingface/`
 
 ## Current State
 
@@ -186,6 +206,8 @@ Prerequisites:
 - **Phase 4.1** (Robustness & Tests): Completed — Error handling, backend tests.
 - **Phase 4.2** (Settings page): Completed — GET/PUT /api/config, GET /api/audio/devices, SettingsPage with hot-reload.
 - **Phase 4.3** (Session UX + Search): Completed — AlertDialog delete, optimistic delete with animation, toast notifications, ChromaDB semantic search, metadata filters (language, mode, date, duration), search endpoint, auto-backfill.
+- **Phase 4.4** (UI redesign): Completed — Renamed to OpenWhisper, warm stone + amber palette, Plus Jakarta Sans + JetBrains Mono fonts, dark/light theme toggle, new logo.
+- **Phase 4.4b** (Model migration): Completed — Replaced vLLM/Voxtral with faster-whisper. No external server needed.
 - See `prd.md` for full roadmap and feature backlog.
 
 ## Data Model (SQLite)
@@ -211,4 +233,3 @@ Two main tables:
 |---------|------|----------|
 | Vite dev server | 5173 | HTTP |
 | FastAPI backend | 8001 | HTTP + WebSocket |
-| vLLM server | 8000 | WebSocket |
