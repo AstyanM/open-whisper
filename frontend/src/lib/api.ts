@@ -107,9 +107,13 @@ export interface TranscriptionModelConfig {
   compute_type: string;
   beam_size: number;
   vad_filter: boolean;
+  vad_min_silence_ms: number;
+  temperature: number;
   buffer_duration_s: number;
   initial_prompt: string | null;
   overlap_duration_s: number;
+  end_padding_ms: number;
+  post_roll_ms: number;
 }
 
 export interface ModelsConfig {

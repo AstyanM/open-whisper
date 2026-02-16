@@ -378,6 +378,7 @@ export function SettingsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="auto">Auto (GPU: Turbo, CPU: Small)</SelectItem>
                 <SelectItem value="tiny">Tiny (~1 GB)</SelectItem>
                 <SelectItem value="base">Base (~1 GB)</SelectItem>
                 <SelectItem value="small">Small (~2 GB)</SelectItem>
@@ -481,6 +482,59 @@ export function SettingsPage() {
             />
           </div>
 
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>VAD min silence</Label>
+              <p className="text-xs text-muted-foreground">
+                Minimum silence (ms) for VAD to split segments
+              </p>
+            </div>
+            <Input
+              type="number"
+              className="w-24"
+              min={100}
+              max={3000}
+              step={50}
+              value={draft.models.transcription.vad_min_silence_ms ?? 500}
+              onChange={(e) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    vad_min_silence_ms: Number(e.target.value),
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Temperature</Label>
+                <p className="text-xs text-muted-foreground">
+                  0 = deterministic (faster), higher = more creative
+                </p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {(draft.models.transcription.temperature ?? 0).toFixed(1)}
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={1}
+              step={0.1}
+              value={[draft.models.transcription.temperature ?? 0]}
+              onValueChange={([v]) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    temperature: v,
+                  },
+                })
+              }
+            />
+          </div>
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div>
@@ -551,6 +605,56 @@ export function SettingsPage() {
                   transcription: {
                     ...draft.models.transcription,
                     initial_prompt: e.target.value || null,
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>End padding</Label>
+              <p className="text-xs text-muted-foreground">
+                Silence appended before transcription to avoid truncation (ms)
+              </p>
+            </div>
+            <Input
+              type="number"
+              className="w-24"
+              min={0}
+              max={1000}
+              step={50}
+              value={draft.models.transcription.end_padding_ms ?? 300}
+              onChange={(e) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    end_padding_ms: Number(e.target.value),
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Post-roll</Label>
+              <p className="text-xs text-muted-foreground">
+                Extra audio capture after stop to avoid cutting last words (ms)
+              </p>
+            </div>
+            <Input
+              type="number"
+              className="w-24"
+              min={0}
+              max={5000}
+              step={100}
+              value={draft.models.transcription.post_roll_ms ?? 1200}
+              onChange={(e) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    post_roll_ms: Number(e.target.value),
                   },
                 })
               }

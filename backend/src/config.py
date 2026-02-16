@@ -27,6 +27,12 @@ class TranscriptionModelConfig(BaseModel):
     compute_type: Literal["float16", "float32", "int8", "int8_float16", "auto"] = "auto"
     beam_size: int = Field(default=5, ge=1, le=20)
     vad_filter: bool = True
+    vad_min_silence_ms: int = Field(
+        default=500,
+        ge=100,
+        le=3000,
+        description="Minimum silence duration (ms) for VAD to split segments",
+    )
     buffer_duration_s: float = Field(default=10.0, ge=1.0, le=30.0)
     initial_prompt: str | None = Field(
         default=None,
@@ -37,6 +43,24 @@ class TranscriptionModelConfig(BaseModel):
         ge=0.0,
         le=5.0,
         description="Seconds of audio overlap between consecutive chunks",
+    )
+    temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Decoding temperature (0 = deterministic greedy, faster)",
+    )
+    end_padding_ms: int = Field(
+        default=300,
+        ge=0,
+        le=1000,
+        description="Silence padding (ms) appended before transcription to avoid truncation",
+    )
+    post_roll_ms: int = Field(
+        default=1200,
+        ge=0,
+        le=5000,
+        description="Extra audio capture (ms) after stop to avoid cutting last words",
     )
 
 

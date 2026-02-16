@@ -85,6 +85,7 @@ def get_model_info() -> dict[str, str | None]:
 def _get_or_load_model(config: TranscriptionModelConfig) -> WhisperModel:
     """Get the cached model or load a new one.
 
+    If model_size is 'auto', selects large-v3-turbo for GPU or small for CPU.
     If device is 'auto' or 'cuda' and CUDA loading fails (e.g. missing cuBLAS),
     automatically falls back to CPU with float32.
     The CUDA check includes a real transcription test because cuBLAS errors
@@ -92,23 +93,42 @@ def _get_or_load_model(config: TranscriptionModelConfig) -> WhisperModel:
     """
     global _model, _model_config_key, _model_actual_device
 
-    config_key = f"{config.model_size}:{config.device}:{config.compute_type}"
+    # Resolve "auto" model size based on available device
+    model_size = config.model_size
+    if model_size == "auto":
+        _has_cuda = False
+        try:
+            import ctranslate2
+
+            _has_cuda = "cuda" in ctranslate2.get_supported_compute_types("cuda")
+        except Exception:
+            pass
+        if _has_cuda:
+            model_size = "large-v3-turbo"
+            _debug("[WHISPER] Auto model: CUDA available -> large-v3-turbo")
+            logger.info("Auto model selection: CUDA available -> large-v3-turbo")
+        else:
+            model_size = "small"
+            _debug("[WHISPER] Auto model: CPU only -> small")
+            logger.info("Auto model selection: CPU only -> small")
+
+    config_key = f"{model_size}:{config.device}:{config.compute_type}"
     if _model is not None and _model_config_key == config_key:
         _debug(f"[WHISPER] Reusing cached model (key={config_key})")
         logger.info("Reusing cached model (key=%s)", config_key)
         return _model
 
-    _debug(f"[WHISPER] Loading model: {config.model_size} (device={config.device}, compute_type={config.compute_type})")
+    _debug(f"[WHISPER] Loading model: {model_size} (device={config.device}, compute_type={config.compute_type})")
     logger.info(
         "Loading faster-whisper model: %s (device=%s, compute_type=%s)",
-        config.model_size,
+        model_size,
         config.device,
         config.compute_type,
     )
     t0 = time.monotonic()
     try:
         _model = WhisperModel(
-            config.model_size,
+            model_size,
             device=config.device,
             compute_type=config.compute_type,
         )
@@ -135,13 +155,18 @@ def _get_or_load_model(config: TranscriptionModelConfig) -> WhisperModel:
             logger.warning(
                 "CUDA loading failed (%s). Falling back to CPU with float32.", e
             )
+            # If we auto-selected a large model for GPU, downgrade for CPU
+            if config.model_size == "auto":
+                model_size = "small"
+                _debug("[WHISPER] Auto model: CUDA fallback -> downgrading to small")
+                logger.info("Auto model: CUDA fallback -> downgrading to small")
             _model = WhisperModel(
-                config.model_size,
+                model_size,
                 device="cpu",
                 compute_type="float32",
             )
             _model_actual_device = "cpu (fallback)"
-            config_key = f"{config.model_size}:cpu:float32"
+            config_key = f"{model_size}:cpu:float32"
         else:
             raise WhisperModelError(f"Failed to load Whisper model: {e}") from e
     except Exception as e:
@@ -229,12 +254,21 @@ class WhisperSession:
         self._audio_buffer.extend(pcm_bytes)
 
     async def signal_end_of_audio(self) -> None:
-        """Signal that no more audio will be sent."""
-        _debug(f"[WHISPER] End of audio signaled (buffer={len(self._audio_buffer)} bytes)")
+        """Signal that no more audio will be sent.
+
+        If post_roll_ms > 0, waits that duration before signaling so the
+        frontend can keep sending the last audio chunks (avoids cutting the
+        user's last words).
+        """
+        post_roll_s = self._config.post_roll_ms / 1000.0
+        _debug(f"[WHISPER] End of audio signaled (buffer={len(self._audio_buffer)} bytes, post_roll={post_roll_s:.1f}s)")
         logger.info(
-            "[Session] End of audio signaled (buffer=%d bytes)",
+            "[Session] End of audio signaled (buffer=%d bytes, post_roll=%.1fs)",
             len(self._audio_buffer),
+            post_roll_s,
         )
+        if post_roll_s > 0:
+            await asyncio.sleep(post_roll_s)
         self._end_of_audio.set()
 
     async def stream_transcription(self) -> AsyncIterator[str]:
@@ -356,19 +390,32 @@ class WhisperSession:
 
     def _transcribe_chunk(self, audio: np.ndarray) -> str:
         """Run faster-whisper transcription on a float32 audio array. Sync."""
+        # Append silence padding to avoid Whisper truncating last words
+        if self._config.end_padding_ms > 0:
+            pad_samples = int(self._sample_rate * self._config.end_padding_ms / 1000)
+            audio = np.concatenate([audio, np.zeros(pad_samples, dtype=np.float32)])
+
         # Build prompt: previous text takes priority, then config initial_prompt
         prompt = self._previous_text or self._config.initial_prompt or None
         # Truncate to last ~200 chars to stay within Whisper's prompt token limit
         if prompt and len(prompt) > 200:
             prompt = prompt[-200:]
 
-        _debug(f"[WHISPER] _transcribe_chunk: {len(audio)/self._sample_rate:.1f}s audio, lang={self._language}, beam={self._config.beam_size}, vad={self._config.vad_filter}, prompt={repr(prompt[:60]) if prompt else None}")
+        # VAD parameters
+        vad_params = (
+            {"min_silence_duration_ms": self._config.vad_min_silence_ms}
+            if self._config.vad_filter
+            else None
+        )
+
+        _debug(f"[WHISPER] _transcribe_chunk: {len(audio)/self._sample_rate:.1f}s audio, lang={self._language}, beam={self._config.beam_size}, vad={self._config.vad_filter}, temp={self._config.temperature}, prompt={repr(prompt[:60]) if prompt else None}")
         logger.info(
-            "[Transcribe] Starting (%.1fs audio, lang=%s, beam=%d, vad=%s, prompt=%s)",
+            "[Transcribe] Starting (%.1fs audio, lang=%s, beam=%d, vad=%s, temp=%.1f, prompt=%s)",
             len(audio) / self._sample_rate,
             self._language,
             self._config.beam_size,
             self._config.vad_filter,
+            self._config.temperature,
             repr(prompt[:60]) if prompt else None,
         )
         segments, _info = self._model.transcribe(
@@ -376,7 +423,10 @@ class WhisperSession:
             language=self._language,
             beam_size=self._config.beam_size,
             vad_filter=self._config.vad_filter,
+            vad_parameters=vad_params,
             initial_prompt=prompt,
+            temperature=self._config.temperature,
+            condition_on_previous_text=False,
         )
         # Force-consume the generator (it's lazy)
         result_parts = []

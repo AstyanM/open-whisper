@@ -21,6 +21,7 @@ def fw_config():
         buffer_duration_s=1.0,
         beam_size=1,
         vad_filter=False,
+        post_roll_ms=0,
     )
 
 

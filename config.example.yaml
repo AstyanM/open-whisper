@@ -13,14 +13,19 @@ shortcuts:
 # Model settings (OpenAI Whisper via faster-whisper)
 models:
   transcription:
-    model_size: "small"         # tiny, base, small, medium, large-v3, large-v3-turbo
+    model_size: "auto"          # auto, tiny, base, small, medium, large-v3, large-v3-turbo
+                                # auto = large-v3-turbo on GPU, small on CPU
     device: "auto"              # auto, cuda, cpu
     compute_type: "auto"        # auto, float16, int8, int8_float16
     beam_size: 5                # 1 = greedy (fast), 5 = beam search (accurate)
     vad_filter: true            # Skip silent regions (recommended)
+    vad_min_silence_ms: 500     # Min silence duration (ms) for VAD to split (100-3000)
+    temperature: 0.0            # 0 = deterministic greedy (faster), >0 = sampling
     buffer_duration_s: 10.0     # Seconds to buffer before transcribing (1-30)
     initial_prompt: null        # Prompt to prime the model, e.g. "Bonjour, transcription en français."
     overlap_duration_s: 1.0     # Audio overlap between chunks to avoid cut words (0-5)
+    end_padding_ms: 300         # Silence appended before transcription to avoid truncation (0-1000)
+    post_roll_ms: 1200          # Extra audio capture after stop to avoid cutting last words (0-5000)
 
 # Audio capture settings
 audio:
