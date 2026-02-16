@@ -10,7 +10,7 @@ export type BackendStatus =
 
 export interface HealthChecks {
   database?: { status: string; message?: string };
-  vllm?: { status: string; message?: string };
+  transcription?: { status: string; engine?: string; model?: string; message?: string };
   audio?: { status: string; input_devices?: number; message?: string };
 }
 

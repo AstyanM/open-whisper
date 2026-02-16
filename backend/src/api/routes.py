@@ -1,9 +1,7 @@
 """REST API routes for health check, config, and session management."""
 
-import asyncio
 import logging
 
-import websockets
 import yaml
 from fastapi import APIRouter, HTTPException, Request
 
@@ -44,22 +42,25 @@ async def health_check():
         checks["database"] = {"status": "error", "message": str(e)}
         overall = "unhealthy"
 
-    # vLLM check
+    # Transcription engine check
     try:
-        if config:
-            port = config.models.transcription.vllm_port
-            uri = f"ws://localhost:{port}/v1/realtime"
-            ws = await asyncio.wait_for(
-                websockets.connect(uri, open_timeout=3), timeout=3
-            )
-            await ws.close()
-            checks["vllm"] = {"status": "ok"}
-        else:
-            checks["vllm"] = {"status": "unknown", "message": "Config not loaded"}
-            if overall == "healthy":
-                overall = "degraded"
-    except Exception:
-        checks["vllm"] = {"status": "error", "message": "vLLM unreachable"}
+        from faster_whisper import WhisperModel  # noqa: F401
+        from src.transcription.whisper_client import get_model_info
+
+        model_size = config.models.transcription.model_size if config else "unknown"
+        model_info = get_model_info()
+        checks["transcription"] = {
+            "status": "ok",
+            "engine": "faster-whisper",
+            "model": model_size,
+            "device": model_info["actual_device"] or (config.models.transcription.device if config else "unknown"),
+            "loaded": model_info["loaded"],
+        }
+    except ImportError:
+        checks["transcription"] = {
+            "status": "error",
+            "message": "faster-whisper not installed",
+        }
         if overall == "healthy":
             overall = "degraded"
 
@@ -93,14 +94,22 @@ async def get_config():
 
 
 # Fields that take effect immediately without restart
-_HOT_RELOAD_PREFIXES = ("language", "overlay", "models.transcription.delay_ms")
+_HOT_RELOAD_PREFIXES = (
+    "language",
+    "overlay",
+    "models.transcription.beam_size",
+    "models.transcription.vad_filter",
+    "models.transcription.buffer_duration_s",
+    "models.transcription.model_size",
+    "models.transcription.device",
+    "models.transcription.compute_type",
+)
 # Fields that require an application restart
 _RESTART_REQUIRED_PREFIXES = (
     "audio.device",
     "audio.chunk_duration_ms",
     "backend.",
     "storage.",
-    "models.transcription.vllm_port",
 )
 
 

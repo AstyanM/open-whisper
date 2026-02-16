@@ -6,7 +6,7 @@ import { invokeCommand } from "@/lib/tauri";
 export type DictationState =
   | "idle"
   | "connecting"
-  | "connecting_vllm"
+  | "loading_model"
   | "recording"
   | "finalizing"
   | "error";
@@ -15,6 +15,7 @@ export interface UseDictationReturn {
   state: DictationState;
   toggle: (language?: string) => void;
   error: string | null;
+  device: string | null;
 }
 
 interface WsMessage {
@@ -25,6 +26,7 @@ interface WsMessage {
 export function useDictation(): UseDictationReturn {
   const [state, setState] = useState<DictationState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [device, setDevice] = useState<string | null>(null);
   const languageRef = useRef(DEFAULT_LANGUAGE);
 
   // Buffer deltas and inject in batches to avoid dropped keystrokes
@@ -72,10 +74,11 @@ export function useDictation(): UseDictationReturn {
 
         case "status":
           console.log("[Dictation] status:", msg.state);
-          if (msg.state === "connecting_vllm") {
-            setState("connecting_vllm");
+          if (msg.state === "loading_model") {
+            setState("loading_model");
           } else if (msg.state === "recording") {
             setState("recording");
+            if (msg.device) setDevice(msg.device as string);
           }
           break;
 
@@ -152,7 +155,7 @@ export function useDictation(): UseDictationReturn {
         setState("finalizing");
         send({ type: "stop" });
       } else {
-        // connecting, connecting_vllm, finalizing — force stop
+        // connecting, loading_model, finalizing — force stop
         setState("idle");
         disconnect();
       }
@@ -160,5 +163,5 @@ export function useDictation(): UseDictationReturn {
     [state, connect, send],
   );
 
-  return { state, toggle, error };
+  return { state, toggle, error, device };
 }

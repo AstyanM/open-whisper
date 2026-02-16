@@ -30,22 +30,10 @@ class AudioPermissionError(AudioDeviceError):
     code = "audio_permission_denied"
 
 
-class VLLMConnectionError(VTSError):
-    """Cannot connect to vLLM server."""
+class WhisperModelError(VTSError):
+    """Whisper model loading or transcription error."""
 
-    code = "vllm_connection_error"
-
-
-class VLLMTimeoutError(VTSError):
-    """vLLM did not respond within timeout."""
-
-    code = "vllm_timeout"
-
-
-class VLLMProtocolError(VTSError):
-    """Unexpected message from vLLM."""
-
-    code = "vllm_protocol_error"
+    code = "whisper_model_error"
 
 
 class DatabaseError(VTSError):

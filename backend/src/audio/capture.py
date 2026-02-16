@@ -1,8 +1,8 @@
 """Audio capture module using sounddevice.
 
 Captures audio from the system microphone in PCM16 format at 16kHz mono,
-and provides chunks as base64-encoded strings suitable for the vLLM
-Realtime WebSocket API.
+and provides chunks as base64-encoded strings suitable for the Whisper
+transcription engine.
 """
 
 import asyncio

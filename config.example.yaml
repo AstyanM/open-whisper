@@ -1,4 +1,4 @@
-# OpenWhisper — Configuration Template
+# Voice-to-Speech Local — Configuration Template
 # Copy this file to config.yaml and adjust settings as needed.
 
 # Default transcription language.
@@ -10,20 +10,22 @@ shortcuts:
   toggle_dictation: "Ctrl+Shift+D"      # Activate/deactivate dictation mode
   toggle_transcription: "Ctrl+Shift+T"  # Open/focus transcription window
 
-# Model settings
+# Model settings (OpenAI Whisper via faster-whisper)
 models:
   transcription:
-    name: "mistralai/Voxtral-Mini-4B-Realtime-2602"  # HuggingFace model ID
-    quantization: "awq"       # awq, gptq, or bf16
-    delay_ms: 480             # Streaming delay (80-2400ms, sweet spot: 480ms)
-    vllm_port: 8000           # Port where vLLM server is running
+    model_size: "small"         # tiny, base, small, medium, large-v3-turbo
+    device: "auto"              # auto, cuda, cpu
+    compute_type: "auto"        # auto, float16, int8, int8_float16
+    beam_size: 5                # 1 = greedy (fast), 5 = beam search (accurate)
+    vad_filter: true            # Skip silent regions (recommended)
+    buffer_duration_s: 3.0      # Seconds to buffer before transcribing (1-10)
 
 # Audio capture settings
 audio:
-  sample_rate: 16000          # Sample rate in Hz (16kHz for Voxtral)
+  sample_rate: 16000          # Sample rate in Hz (16kHz for Whisper)
   channels: 1                 # Mono audio
   device: "default"           # Audio input device name or index
-  chunk_duration_ms: 80       # Duration per chunk (80ms = 1 Voxtral token)
+  chunk_duration_ms: 80       # Duration per audio chunk in ms
 
 # Overlay window settings
 overlay:

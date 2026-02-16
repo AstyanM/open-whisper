@@ -156,8 +156,8 @@ async def test_update_config_language(client, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_update_config_invalid_delay(client):
-    """PUT /api/config rejects out-of-range delay_ms with 422."""
+async def test_update_config_invalid_beam_size(client):
+    """PUT /api/config rejects out-of-range beam_size with 422."""
     import src.main
     from src.config import AppConfig
 
@@ -165,7 +165,7 @@ async def test_update_config_invalid_delay(client):
 
     resp = await client.put(
         "/api/config",
-        json={"models": {"transcription": {"delay_ms": 10}}},
+        json={"models": {"transcription": {"beam_size": 0}}},
     )
     assert resp.status_code == 422
 

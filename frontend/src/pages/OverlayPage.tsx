@@ -7,7 +7,7 @@ export interface MicStatePayload {
   state:
     | "idle"
     | "connecting"
-    | "connecting_vllm"
+    | "loading_model"
     | "recording"
     | "finalizing"
     | "error";
@@ -85,7 +85,7 @@ function getOverlayStyle(
   }
   const pulse =
     state === "connecting" ||
-    state === "connecting_vllm" ||
+    state === "loading_model" ||
     state === "recording" ||
     state === "finalizing";
   return { ...colors, pulse };

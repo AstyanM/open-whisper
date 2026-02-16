@@ -10,7 +10,7 @@ export function BackendStatusBanner() {
   if (status === "unreachable") {
     messages.push("Backend is unreachable");
   } else {
-    if (checks.vllm?.status === "error") messages.push("vLLM unavailable");
+    if (checks.transcription?.status === "error") messages.push("Transcription engine unavailable");
     if (checks.audio?.status === "error") messages.push("No audio device");
     if (checks.database?.status === "error") messages.push("Database error");
   }

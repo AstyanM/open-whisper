@@ -20,22 +20,23 @@ def test_config_defaults():
     """Test that defaults are applied when fields are missing."""
     config = AppConfig.model_validate({})
     assert config.language == "fr"
-    assert config.models.transcription.delay_ms == 480
+    assert config.models.transcription.model_size == "small"
+    assert config.models.transcription.beam_size == 5
     assert config.audio.chunk_duration_ms == 80
     assert config.backend.host == "127.0.0.1"
     assert config.overlay.position == "top-right"
 
 
-def test_config_validation_delay_range():
-    """Test that delay_ms validation enforces range."""
+def test_config_validation_beam_size_range():
+    """Test that beam_size validation enforces range."""
     with pytest.raises(Exception):
         AppConfig.model_validate({
-            "models": {"transcription": {"delay_ms": 10}}
+            "models": {"transcription": {"beam_size": 0}}
         })
 
     with pytest.raises(Exception):
         AppConfig.model_validate({
-            "models": {"transcription": {"delay_ms": 3000}}
+            "models": {"transcription": {"beam_size": 25}}
         })
 
 

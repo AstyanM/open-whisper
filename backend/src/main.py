@@ -1,6 +1,7 @@
 """FastAPI application entry point for OpenWhisper backend."""
 
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -21,10 +22,29 @@ logger = logging.getLogger(__name__)
 config: AppConfig | None = None
 
 
+def _configure_logging():
+    """Configure logging explicitly so it survives uvicorn reload and library imports."""
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    # Remove any existing handlers to avoid duplicates on reload
+    root.handlers.clear()
+    root.addHandler(handler)
+    # Explicitly set our package loggers
+    for name in ("src", "src.api.ws", "src.transcription.whisper_client", "src.audio.capture"):
+        logging.getLogger(name).setLevel(logging.INFO)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: load config on startup."""
     global config
+
+    _configure_logging()
 
     try:
         config = load_config()
@@ -96,7 +116,8 @@ def main():
         "src.main:app",
         host=cfg.backend.host,
         port=cfg.backend.port,
-        reload=True,
+        reload=False,  # Disabled: watchfiles reload kills WebSocket connections
+        log_level="info",
     )
 
 

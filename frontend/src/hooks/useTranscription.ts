@@ -5,7 +5,7 @@ import { WS_URL, DEFAULT_LANGUAGE } from "@/lib/constants";
 export type TranscriptionState =
   | "idle"
   | "connecting"
-  | "connecting_vllm"
+  | "loading_model"
   | "recording"
   | "finalizing"
   | "error";
@@ -19,6 +19,7 @@ export interface UseTranscriptionReturn {
   sessionId: number | null;
   error: string | null;
   elapsedMs: number;
+  device: string | null;
 }
 
 interface WsMessage {
@@ -32,6 +33,7 @@ export function useTranscription(): UseTranscriptionReturn {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [device, setDevice] = useState<string | null>(null);
   const elapsedOffsetRef = useRef(0);
   const languageRef = useRef(DEFAULT_LANGUAGE);
 
@@ -44,10 +46,13 @@ export function useTranscription(): UseTranscriptionReturn {
           break;
 
         case "status":
-          if (msg.state === "connecting_vllm") {
-            setState("connecting_vllm");
+          if (msg.state === "loading_model") {
+            setState("loading_model");
           } else if (msg.state === "recording") {
             setState("recording");
+            if (msg.device) setDevice(msg.device as string);
+          } else if (msg.state === "finalizing") {
+            setState("finalizing");
           }
           break;
 
@@ -138,5 +143,5 @@ export function useTranscription(): UseTranscriptionReturn {
     // Do NOT disconnect here — wait for session_ended from backend
   }, [send]);
 
-  return { state, start, resume, stop, liveText, sessionId, error, elapsedMs };
+  return { state, start, resume, stop, liveText, sessionId, error, elapsedMs, device };
 }

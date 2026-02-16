@@ -29,7 +29,7 @@ export interface HealthResponse {
   service: string;
   checks: {
     database?: { status: string; message?: string };
-    vllm?: { status: string; message?: string };
+    transcription?: { status: string; engine?: string; model?: string; message?: string };
     audio?: { status: string; input_devices?: number; message?: string };
   };
 }
@@ -102,10 +102,12 @@ export interface ShortcutsConfig {
 }
 
 export interface TranscriptionModelConfig {
-  name: string;
-  quantization: string;
-  delay_ms: number;
-  vllm_port: number;
+  model_size: string;
+  device: "cuda" | "cpu" | "auto";
+  compute_type: string;
+  beam_size: number;
+  vad_filter: boolean;
+  buffer_duration_s: number;
 }
 
 export interface ModelsConfig {

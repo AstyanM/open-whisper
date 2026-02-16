@@ -348,36 +348,112 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ── Streaming ──────────────────────────────────────── */}
+      {/* ── Transcription ───────────────────────────────────── */}
       <Card className="border-accent-top">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            Streaming
+            Transcription
           </CardTitle>
           <CardDescription>
-            Transcription streaming parameters.
+            Whisper model and transcription parameters. Model/device/compute
+            changes require a restart.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
+            <Label>Model size</Label>
+            <Select
+              value={draft.models.transcription.model_size}
+              onValueChange={(v) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    model_size: v,
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tiny">Tiny (~1 GB)</SelectItem>
+                <SelectItem value="base">Base (~1 GB)</SelectItem>
+                <SelectItem value="small">Small (~2 GB)</SelectItem>
+                <SelectItem value="medium">Medium (~5 GB)</SelectItem>
+                <SelectItem value="large-v3-turbo">Large V3 Turbo (~6 GB)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label>Device</Label>
+            <Select
+              value={draft.models.transcription.device}
+              onValueChange={(v) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    device: v as "cuda" | "cpu" | "auto",
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="cuda">CUDA (GPU)</SelectItem>
+                <SelectItem value="cpu">CPU</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label>Compute type</Label>
+            <Select
+              value={draft.models.transcription.compute_type}
+              onValueChange={(v) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    compute_type: v,
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="float16">Float16</SelectItem>
+                <SelectItem value="int8">Int8</SelectItem>
+                <SelectItem value="int8_float16">Int8 + Float16</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between">
             <div>
-              <Label>Delay (ms)</Label>
+              <Label>Beam size</Label>
               <p className="text-xs text-muted-foreground">
-                480 ms recommended
+                1 = greedy (fast), 5 = beam search (accurate)
               </p>
             </div>
             <Input
               type="number"
               className="w-24"
-              min={80}
-              max={2400}
-              value={draft.models.transcription.delay_ms}
+              min={1}
+              max={20}
+              value={draft.models.transcription.beam_size}
               onChange={(e) =>
                 set("models", {
                   transcription: {
                     ...draft.models.transcription,
-                    delay_ms: Number(e.target.value),
+                    beam_size: Number(e.target.value),
                   },
                 })
               }
@@ -386,22 +462,46 @@ export function SettingsPage() {
 
           <div className="flex items-center justify-between">
             <div>
-              <Label>vLLM port</Label>
+              <Label>VAD filter</Label>
               <p className="text-xs text-muted-foreground">
-                Port change requires restart
+                Skip silent regions for faster transcription
               </p>
             </div>
-            <Input
-              type="number"
-              className="w-24"
-              min={1}
-              max={65535}
-              value={draft.models.transcription.vllm_port}
-              onChange={(e) =>
+            <Switch
+              checked={draft.models.transcription.vad_filter}
+              onCheckedChange={(v) =>
                 set("models", {
                   transcription: {
                     ...draft.models.transcription,
-                    vllm_port: Number(e.target.value),
+                    vad_filter: v,
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Buffer duration</Label>
+                <p className="text-xs text-muted-foreground">
+                  Seconds of audio to accumulate before transcribing
+                </p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {draft.models.transcription.buffer_duration_s}s
+              </span>
+            </div>
+            <Slider
+              min={1}
+              max={10}
+              step={0.5}
+              value={[draft.models.transcription.buffer_duration_s]}
+              onValueChange={([v]) =>
+                set("models", {
+                  transcription: {
+                    ...draft.models.transcription,
+                    buffer_duration_s: v,
                   },
                 })
               }
@@ -424,8 +524,6 @@ export function SettingsPage() {
         <CardContent className="space-y-3">
           <InfoRow label="Backend" value={`${draft.backend.host}:${draft.backend.port}`} />
           <InfoRow label="Database" value={draft.storage.db_path} />
-          <InfoRow label="Model" value={draft.models.transcription.name} />
-          <InfoRow label="Quantization" value={draft.models.transcription.quantization} />
         </CardContent>
       </Card>
     </div>

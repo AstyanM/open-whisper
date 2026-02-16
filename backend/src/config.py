@@ -22,10 +22,12 @@ class ShortcutsConfig(BaseModel):
 
 
 class TranscriptionModelConfig(BaseModel):
-    name: str = "mistralai/Voxtral-Mini-4B-Realtime-2602"
-    quantization: Literal["awq", "gptq", "bf16"] = "awq"
-    delay_ms: int = Field(default=480, ge=80, le=2400)
-    vllm_port: int = Field(default=8000, ge=1, le=65535)
+    model_size: str = "small"
+    device: Literal["cuda", "cpu", "auto"] = "auto"
+    compute_type: Literal["float16", "float32", "int8", "int8_float16", "auto"] = "auto"
+    beam_size: int = Field(default=5, ge=1, le=20)
+    vad_filter: bool = True
+    buffer_duration_s: float = Field(default=3.0, ge=1.0, le=10.0)
 
 
 class ModelsConfig(BaseModel):
@@ -40,7 +42,7 @@ class AudioConfig(BaseModel):
         default=80,
         ge=20,
         le=500,
-        description="Duration of each audio chunk in ms. 80ms = 1 Voxtral token.",
+        description="Duration of each audio chunk in ms.",
     )
 
 

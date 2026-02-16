@@ -56,7 +56,7 @@ describe("useBackendHealth", () => {
     });
   });
 
-  it("sets degraded when vllm is down", async () => {
+  it("sets degraded when transcription engine is down", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
@@ -65,7 +65,7 @@ describe("useBackendHealth", () => {
           service: "test",
           checks: {
             database: { status: "ok" },
-            vllm: { status: "error", message: "unreachable" },
+            transcription: { status: "error", message: "faster-whisper not installed" },
           },
         }),
     });
@@ -76,6 +76,6 @@ describe("useBackendHealth", () => {
     await waitFor(() => {
       expect(result.current.status).toBe("degraded");
     });
-    expect(result.current.checks.vllm?.status).toBe("error");
+    expect(result.current.checks.transcription?.status).toBe("error");
   });
 });

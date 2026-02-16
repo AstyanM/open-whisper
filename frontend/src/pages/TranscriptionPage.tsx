@@ -18,7 +18,7 @@ export function TranscriptionPage() {
     isActive,
   } = useTranscriptionContext();
 
-  const { state, start, resume, stop, liveText, error, elapsedMs } = transcription;
+  const { state, start, resume, stop, liveText, error, elapsedMs, device } = transcription;
   const hasText = liveText.length > 0;
 
   return (
@@ -26,7 +26,7 @@ export function TranscriptionPage() {
       {/* Controls */}
       <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-4 py-3">
         <div className="flex items-center gap-4">
-          <StatusIndicator state={isDictating ? dictation.state : state} />
+          <StatusIndicator state={isDictating ? dictation.state : state} device={isDictating ? dictation.device : device} />
           {isDictating && (
             <Badge variant="dictation">
               <Keyboard className="mr-1 h-3 w-3" />

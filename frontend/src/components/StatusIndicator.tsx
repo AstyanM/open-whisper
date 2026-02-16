@@ -12,11 +12,11 @@ const stateConfig: Record<
     pulse: true,
     label: "Connecting...",
   },
-  connecting_vllm: {
+  loading_model: {
     color: "bg-amber-500",
     glow: "shadow-[0_0_6px_rgba(245,158,11,0.4)]",
     pulse: true,
-    label: "Connecting to vLLM...",
+    label: "Loading model...",
   },
   recording: {
     color: "bg-amber-500",
@@ -35,10 +35,16 @@ const stateConfig: Record<
 
 interface StatusIndicatorProps {
   state: TranscriptionState;
+  device?: string | null;
 }
 
-export function StatusIndicator({ state }: StatusIndicatorProps) {
+export function StatusIndicator({ state, device }: StatusIndicatorProps) {
   const config = stateConfig[state];
+
+  const label =
+    state === "recording" && device
+      ? `Recording (${device})`
+      : config.label;
 
   return (
     <div className="flex items-center gap-2">
@@ -59,7 +65,7 @@ export function StatusIndicator({ state }: StatusIndicatorProps) {
           )}
         />
       </span>
-      <span className="text-sm text-muted-foreground">{config.label}</span>
+      <span className="text-sm text-muted-foreground">{label}</span>
     </div>
   );
 }

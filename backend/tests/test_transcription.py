@@ -1,138 +1,157 @@
-"""Tests for vLLM Realtime client with mock WebSocket server."""
+"""Tests for faster-whisper transcription client."""
 
 import asyncio
-import json
-import socket
+import base64
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
-import websockets
 
-from src.transcription.client import VLLMRealtimeClient
-from src.exceptions import VLLMConnectionError, VLLMTimeoutError, VLLMProtocolError
+from src.config import TranscriptionModelConfig
+from src.transcription.whisper_client import WhisperClient, WhisperSession
 
 
 @pytest.fixture
-def free_port():
-    """Get a free TCP port."""
-    with socket.socket() as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
+def fw_config():
+    """Config with short buffer for fast tests."""
+    return TranscriptionModelConfig(
+        model_size="tiny",
+        device="cpu",
+        compute_type="float32",
+        buffer_duration_s=1.0,
+        beam_size=1,
+        vad_filter=False,
+    )
+
+
+def make_audio_chunk(duration_ms: int = 80, sample_rate: int = 16000) -> str:
+    """Generate a silent PCM16 audio chunk as base64."""
+    n_samples = int(sample_rate * duration_ms / 1000)
+    pcm = np.zeros(n_samples, dtype=np.int16)
+    return base64.b64encode(pcm.tobytes()).decode("ascii")
 
 
 @pytest.mark.asyncio
-async def test_connect_refused_raises_vllm_error():
-    """When vLLM is not running, should raise VLLMConnectionError."""
-    client = VLLMRealtimeClient(host="localhost", port=19999)
-    with pytest.raises(VLLMConnectionError):
-        async with client.connect(language="fr"):
-            pass
+async def test_session_lifecycle(fw_config):
+    """Session can be created, receive audio, and produce transcription."""
+    mock_model = MagicMock()
+    mock_segment = MagicMock()
+    mock_segment.text = "Hello world"
+    mock_model.transcribe.return_value = ([mock_segment], MagicMock())
 
+    with patch(
+        "src.transcription.whisper_client._get_or_load_model",
+        return_value=mock_model,
+    ):
+        client = WhisperClient(config=fw_config, sample_rate=16000)
+        async with client.connect(language="en") as session:
+            # Send enough audio to trigger transcription (> buffer_duration_s)
+            for _ in range(100):
+                await session.send_audio(make_audio_chunk())
+            await session.signal_end_of_audio()
 
-@pytest.mark.asyncio
-async def test_full_session_with_mock_server(free_port):
-    """Full session: connect, send audio, receive deltas, done."""
-
-    async def mock_vllm(ws):
-        # Send session.created
-        await ws.send(json.dumps({"type": "session.created", "id": "test-123"}))
-
-        # Receive session.update
-        msg = json.loads(await ws.recv())
-        assert msg["type"] == "session.update"
-
-        # Receive initial commit
-        msg = json.loads(await ws.recv())
-        assert msg["type"] == "input_audio_buffer.commit"
-
-        # Receive audio chunks until final commit
-        while True:
-            msg = json.loads(await ws.recv())
-            if msg.get("type") == "input_audio_buffer.commit" and msg.get("final"):
-                break
-
-        # Send transcription deltas
-        await ws.send(json.dumps({"type": "transcription.delta", "delta": "Hello "}))
-        await ws.send(json.dumps({"type": "transcription.delta", "delta": "world"}))
-        await ws.send(json.dumps({"type": "transcription.done", "text": "Hello world"}))
-
-    async with websockets.serve(mock_vllm, "localhost", free_port):
-        client = VLLMRealtimeClient(host="localhost", port=free_port)
-        async with client.connect(language="fr") as session:
-            # Send some audio
-            await session.send_audio("dGVzdA==")  # base64 "test"
-
-            # Signal end of audio
-            await session._ws.send(json.dumps({
-                "type": "input_audio_buffer.commit",
-                "final": True,
-            }))
-
-            # Collect streaming deltas
             deltas = []
             async for delta in session.stream_transcription():
                 deltas.append(delta)
 
-    assert deltas == ["Hello ", "world"]
+    assert len(deltas) > 0
+    assert "Hello world" in " ".join(deltas)
+    mock_model.transcribe.assert_called()
 
 
 @pytest.mark.asyncio
-async def test_vllm_error_message_raises(free_port):
-    """vLLM error message should raise RuntimeError."""
+async def test_empty_audio_yields_nothing(fw_config):
+    """No audio should produce no transcription deltas."""
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = ([], MagicMock())
 
-    async def mock_vllm(ws):
-        await ws.send(json.dumps({"type": "session.created", "id": "x"}))
-        await ws.recv()  # session.update
-        await ws.recv()  # initial commit
-        await ws.send(json.dumps({"type": "error", "error": "Model not loaded"}))
+    with patch(
+        "src.transcription.whisper_client._get_or_load_model",
+        return_value=mock_model,
+    ):
+        client = WhisperClient(config=fw_config, sample_rate=16000)
+        async with client.connect(language="en") as session:
+            await session.signal_end_of_audio()
+            deltas = []
+            async for delta in session.stream_transcription():
+                deltas.append(delta)
 
-    async with websockets.serve(mock_vllm, "localhost", free_port):
-        client = VLLMRealtimeClient(host="localhost", port=free_port)
-        async with client.connect() as session:
-            with pytest.raises(RuntimeError, match="vLLM error"):
-                async for _ in session.stream_transcription():
-                    pass
+    assert deltas == []
 
 
 @pytest.mark.asyncio
-async def test_wrong_handshake_raises_protocol_error(free_port):
-    """Wrong initial message should raise VLLMProtocolError."""
+async def test_signal_end_flushes_remaining_buffer(fw_config):
+    """signal_end_of_audio should cause any remaining buffered audio to be transcribed."""
+    mock_model = MagicMock()
+    mock_segment = MagicMock()
+    mock_segment.text = "Final chunk"
+    mock_model.transcribe.return_value = ([mock_segment], MagicMock())
 
-    async def mock_vllm(ws):
-        await ws.send(json.dumps({"type": "unexpected.message"}))
+    with patch(
+        "src.transcription.whisper_client._get_or_load_model",
+        return_value=mock_model,
+    ):
+        client = WhisperClient(config=fw_config, sample_rate=16000)
+        async with client.connect(language="fr") as session:
+            # Send just a tiny bit of audio (less than buffer threshold)
+            await session.send_audio(make_audio_chunk(duration_ms=80))
+            await session.signal_end_of_audio()
 
-    async with websockets.serve(mock_vllm, "localhost", free_port):
-        client = VLLMRealtimeClient(host="localhost", port=free_port)
-        with pytest.raises(VLLMProtocolError):
-            async with client.connect():
+            deltas = []
+            async for delta in session.stream_transcription():
+                deltas.append(delta)
+
+    assert len(deltas) > 0
+    assert "Final chunk" in " ".join(deltas)
+
+
+@pytest.mark.asyncio
+async def test_send_audio_accumulates_buffer(fw_config):
+    """send_audio should accumulate PCM bytes in the internal buffer."""
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = ([], MagicMock())
+
+    with patch(
+        "src.transcription.whisper_client._get_or_load_model",
+        return_value=mock_model,
+    ):
+        client = WhisperClient(config=fw_config, sample_rate=16000)
+        async with client.connect(language="en") as session:
+            chunk = make_audio_chunk(duration_ms=80)
+            await session.send_audio(chunk)
+            await session.send_audio(chunk)
+
+            # Buffer should have 2 chunks worth of data
+            expected_bytes = 2 * 1280 * 2  # 2 chunks * 1280 samples * 2 bytes/sample
+            assert len(session._audio_buffer) == expected_bytes
+
+            await session.signal_end_of_audio()
+            # Drain the stream
+            async for _ in session.stream_transcription():
                 pass
 
 
 @pytest.mark.asyncio
-async def test_finish_collects_full_text(free_port):
-    """Test finish() method collects all deltas and returns TranscriptionResult."""
+async def test_transcribe_called_with_correct_params(fw_config):
+    """Transcribe should be called with the correct language and settings."""
+    mock_model = MagicMock()
+    mock_segment = MagicMock()
+    mock_segment.text = "Test"
+    mock_model.transcribe.return_value = ([mock_segment], MagicMock())
 
-    async def mock_vllm(ws):
-        await ws.send(json.dumps({"type": "session.created", "id": "test-fin"}))
-        await ws.recv()  # session.update
-        await ws.recv()  # initial commit
+    with patch(
+        "src.transcription.whisper_client._get_or_load_model",
+        return_value=mock_model,
+    ):
+        client = WhisperClient(config=fw_config, sample_rate=16000)
+        async with client.connect(language="fr") as session:
+            await session.send_audio(make_audio_chunk(duration_ms=80))
+            await session.signal_end_of_audio()
+            async for _ in session.stream_transcription():
+                pass
 
-        # Receive final commit from finish()
-        msg = json.loads(await ws.recv())
-        assert msg["type"] == "input_audio_buffer.commit"
-        assert msg["final"] is True
-
-        await ws.send(json.dumps({"type": "transcription.delta", "delta": "Bonjour "}))
-        await ws.send(json.dumps({"type": "transcription.delta", "delta": "le monde"}))
-        await ws.send(json.dumps({
-            "type": "transcription.done",
-            "text": "Bonjour le monde",
-            "usage": {"tokens": 42},
-        }))
-
-    async with websockets.serve(mock_vllm, "localhost", free_port):
-        client = VLLMRealtimeClient(host="localhost", port=free_port)
-        async with client.connect() as session:
-            result = await session.finish()
-
-    assert result.text == "Bonjour le monde"
-    assert result.usage == {"tokens": 42}
+    # Verify transcribe was called with correct kwargs
+    call_kwargs = mock_model.transcribe.call_args[1]
+    assert call_kwargs["language"] == "fr"
+    assert call_kwargs["beam_size"] == 1
+    assert call_kwargs["vad_filter"] is False

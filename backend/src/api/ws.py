@@ -4,8 +4,11 @@ import asyncio
 import base64
 import json
 import logging
+import os
+import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -14,16 +17,41 @@ from src.audio.capture import AudioCapture
 from src.exceptions import (
     AudioDeviceError,
     DatabaseError,
-    VLLMConnectionError,
-    VLLMTimeoutError,
+    WhisperModelError,
     VTSError,
 )
-from src.transcription.client import VLLMRealtimeClient
+from src.transcription.whisper_client import WhisperClient
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
 from src.search.vector_store import index_session
 
 logger = logging.getLogger(__name__)
+
+# ── Debug: file-based logging (immune to stdout/stderr/logging issues) ──
+_DEBUG_LOG = Path(__file__).resolve().parent.parent.parent / "data" / "ws_debug.log"
+_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _debug(msg: str) -> None:
+    """Write debug message to a file AND stderr. File output is guaranteed."""
+    line = f"{datetime.now().strftime('%H:%M:%S.%f')[:-3]} {msg}\n"
+    try:
+        with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(line)
+            f.flush()
+            os.fsync(f.fileno())
+    except Exception:
+        pass
+    # Also try stderr
+    try:
+        sys.stderr.write(f"[WS] {line}")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+
+# Module-level marker: if this appears in the log file, the correct code is loaded
+_debug(f"===== ws.py MODULE LOADED (pid={os.getpid()}) =====")
 
 ws_router = APIRouter()
 
@@ -57,34 +85,41 @@ async def websocket_transcribe(websocket: WebSocket):
     Protocol:
     1. Client connects
     2. Client sends {"type": "start", "mode": "transcription", "language": "fr"}
-    3. Server starts audio capture + vLLM streaming
+    3. Server starts audio capture + Whisper transcription
     4. Server streams {"type": "transcript_delta", "delta": "...", "elapsed_ms": ...}
     5. Client sends {"type": "stop"} or disconnects
     6. Server finalizes, sends {"type": "session_ended", ...}
     """
     await websocket.accept()
+    _debug("[WS] WebSocket client connected")
     logger.info("WebSocket client connected")
 
     try:
         while True:
             raw = await websocket.receive_text()
             msg = json.loads(raw)
+            _debug(f"[WS] Received message: {msg.get('type', '?')}")
 
             if msg.get("type") == "start":
                 mode = msg.get("mode", "transcription")
                 language = msg.get("language")
+                _debug(f"[WS] Starting session: mode={mode}, language={language}")
                 await _handle_transcription_session(
                     websocket, mode=mode, language_override=language
                 )
     except WebSocketDisconnect:
+        _debug("[WS] WebSocket client disconnected")
         logger.info("WebSocket client disconnected")
     except RuntimeError as e:
         # Starlette raises RuntimeError when trying to receive after disconnect
         if "disconnect" in str(e).lower():
+            _debug("[WS] WebSocket client disconnected (RuntimeError)")
             logger.info("WebSocket client disconnected")
         else:
+            _debug(f"[WS] WebSocket error: {e}")
             logger.error(f"WebSocket error: {e}", exc_info=True)
     except Exception as e:
+        _debug(f"[WS] WebSocket error: {e}")
         logger.error(f"WebSocket error: {e}", exc_info=True)
         await _send_ws_error(websocket, str(e))
 
@@ -97,12 +132,15 @@ async def _handle_transcription_session(
     """Orchestrate a single transcription session."""
     from src.main import config
 
+    _debug(f"[WS] _handle_transcription_session: mode={mode}, language_override={language_override}")
+
     language = language_override or config.language
 
     # Create DB session
     try:
         db = get_db()
     except RuntimeError:
+        _debug("[WS] Database not available!")
         await _send_ws_error(websocket, "Database not available", "database_error")
         return
 
@@ -118,6 +156,8 @@ async def _handle_transcription_session(
         await _send_ws_error(websocket, "Failed to create session", e.code)
         return
 
+    _debug(f"[WS] Session {session_id} created")
+
     await websocket.send_text(json.dumps({
         "type": "session_started",
         "session_id": session_id,
@@ -132,15 +172,15 @@ async def _handle_transcription_session(
         device=config.audio.device,
     )
 
-    # vLLM client
-    vllm_client = VLLMRealtimeClient(
-        host="localhost",
-        port=config.models.transcription.vllm_port,
-        model=config.models.transcription.name,
+    # Whisper client
+    whisper_client = WhisperClient(
+        config=config.models.transcription,
+        sample_rate=config.audio.sample_rate,
     )
 
     full_text = ""
     session_start_time = time.monotonic()
+    stop_event = asyncio.Event()
 
     async def listen_for_stop():
         """Listen for stop command from the frontend."""
@@ -149,73 +189,110 @@ async def _handle_transcription_session(
                 raw = await websocket.receive_text()
                 msg = json.loads(raw)
                 if msg.get("type") == "stop":
+                    _debug("[WS] Stop command received from client")
                     logger.info("Stop command received")
+                    stop_event.set()
                     capture.stop()
                     return
         except WebSocketDisconnect:
+            _debug("[WS] Client disconnected in listen_for_stop")
+            stop_event.set()
             capture.stop()
 
     async def send_audio(session):
-        """Stream audio from microphone to vLLM."""
+        """Stream audio from microphone to Whisper."""
         chunk_count = 0
+        _debug("[WS] send_audio: starting audio stream...")
         async for audio_b64 in capture.stream():
             await session.send_audio(audio_b64)
             chunk_count += 1
-        logger.info(f"Audio stream ended after {chunk_count} chunks")
-        # Signal end of audio
-        await session._ws.send(json.dumps({
-            "type": "input_audio_buffer.commit",
-            "final": True,
-        }))
+            if chunk_count % 100 == 0:
+                _debug(f"[WS] Audio chunks sent: {chunk_count}")
+                logger.info(f"[WS] Audio chunks sent: {chunk_count}")
+        _debug(f"[WS] Audio stream ended after {chunk_count} chunks")
+        logger.info(f"[WS] Audio stream ended after {chunk_count} chunks")
+        await session.signal_end_of_audio()
+        _debug("[WS] send_audio task complete")
+        logger.info("[WS] send_audio task complete")
 
     async def receive_and_forward(session):
-        """Receive deltas from vLLM and forward to frontend."""
+        """Receive deltas from Whisper and forward to frontend."""
         nonlocal full_text
+        delta_count = 0
+        _debug("[WS] receive_and_forward: waiting for deltas...")
         async for delta in session.stream_transcription():
             full_text += delta
+            delta_count += 1
             elapsed_ms = int(
                 (time.monotonic() - session_start_time) * 1000
             )
+            _debug(f"[WS] Forwarding delta #{delta_count}: {repr(delta[:60])}")
+            logger.info(f"[WS] Forwarding delta #{delta_count}: {repr(delta[:60])}")
             await websocket.send_text(json.dumps({
                 "type": "transcript_delta",
                 "delta": delta,
                 "elapsed_ms": elapsed_ms,
             }))
+        _debug(f"[WS] receive_and_forward complete ({delta_count} deltas, {len(full_text)} chars)")
+        logger.info(f"[WS] receive_and_forward complete ({delta_count} deltas, {len(full_text)} chars)")
 
     try:
+        _debug("[WS] Sending loading_model status")
+        logger.info("[WS] Sending loading_model status")
         await websocket.send_text(json.dumps({
             "type": "status",
-            "state": "connecting_vllm",
+            "state": "loading_model",
         }))
 
-        async with vllm_client.connect(language=language) as session:
+        async with whisper_client.connect(language=language) as session:
+            _debug(f"[WS] Model loaded, sending recording status (device={session.actual_device})")
+            logger.info("[WS] Model loaded, sending recording status (device=%s)", session.actual_device)
             await websocket.send_text(json.dumps({
                 "type": "status",
                 "state": "recording",
+                "device": session.actual_device,
             }))
 
-            await asyncio.gather(
-                listen_for_stop(),
-                send_audio(session),
-                receive_and_forward(session),
-            )
+            _debug("[WS] Starting gather (listen_for_stop, send_audio, receive_and_forward)")
+            logger.info("[WS] Starting gather (listen_for_stop, send_audio, receive_and_forward)")
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        listen_for_stop(),
+                        send_audio(session),
+                        receive_and_forward(session),
+                    ),
+                    timeout=300,  # 5 minutes max session
+                )
+            except asyncio.TimeoutError:
+                _debug("[WS] Session timed out after 5 minutes")
+                logger.warning("[WS] Session timed out after 5 minutes")
+            _debug("[WS] Gather completed")
+            logger.info("[WS] Gather completed, all tasks done")
 
-    except VLLMConnectionError as e:
-        logger.error(f"vLLM connection failed: {e}")
-        await _send_ws_error(websocket, str(e), e.code)
-    except VLLMTimeoutError as e:
-        logger.error(f"vLLM timeout: {e}")
+    except WhisperModelError as e:
+        _debug(f"[WS] Whisper model error: {e}")
+        logger.error(f"Whisper model error: {e}")
         await _send_ws_error(websocket, str(e), e.code)
     except AudioDeviceError as e:
+        _debug(f"[WS] Audio device error: {e}")
         logger.error(f"Audio device error: {e}")
         await _send_ws_error(websocket, str(e), e.code)
     except WebSocketDisconnect:
+        _debug("[WS] Client disconnected during session")
         logger.info("Client disconnected during session")
     except Exception as e:
+        _debug(f"[WS] Unexpected session error: {e}")
         logger.error(f"Unexpected session error: {e}", exc_info=True)
         await _send_ws_error(websocket, "An unexpected error occurred")
 
-    # Finalize session
+    # Finalize session — notify frontend immediately
+    _debug(f"[WS] Finalizing session {session_id}...")
+    await _send_ws_json(websocket, {
+        "type": "status",
+        "state": "finalizing",
+    })
+
     try:
         ended_at = datetime.now(timezone.utc)
         duration_s = (ended_at - started_at).total_seconds()
@@ -251,20 +328,24 @@ async def _handle_transcription_session(
             except Exception as e:
                 logger.warning(f"Failed to index session {session_id}: {e}")
 
+        _debug(f"[WS] Sending session_ended for session {session_id}")
         await _send_ws_json(websocket, {
             "type": "session_ended",
             "session_id": session_id,
             "duration_s": round(duration_s, 2),
         })
 
+        _debug(f"[WS] Session {session_id} ended: {duration_s:.1f}s, {len(full_text)} chars")
         logger.info(
             f"Session {session_id} ended: {duration_s:.1f}s, "
             f"{len(full_text)} chars"
         )
     except DatabaseError as e:
+        _debug(f"[WS] Failed to finalize session {session_id}: {e}")
         logger.error(f"Failed to finalize session {session_id}: {e}")
         await _send_ws_error(websocket, "Failed to save session", e.code)
     except Exception as e:
+        _debug(f"[WS] Failed to finalize session {session_id}: {e}")
         logger.error(f"Failed to finalize session {session_id}: {e}", exc_info=True)
 
 
