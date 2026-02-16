@@ -8,6 +8,7 @@ export interface SessionSummary {
   ended_at: string | null;
   duration_s: number | null;
   created_at: string;
+  preview?: string;
 }
 
 export interface Segment {

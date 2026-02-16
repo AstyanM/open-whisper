@@ -142,6 +142,28 @@ class SessionRepository:
         segments = await self.get_segments(session_id)
         return " ".join(seg.text for seg in segments)
 
+    async def get_session_previews(
+        self, session_ids: list[int], max_chars: int = 120
+    ) -> dict[int, str]:
+        """Get truncated text preview for multiple sessions in one query."""
+        if not session_ids:
+            return {}
+        try:
+            placeholders = ",".join("?" for _ in session_ids)
+            cursor = await self.db.execute(
+                f"SELECT session_id, GROUP_CONCAT(text, ' ') as full_text "
+                f"FROM segments WHERE session_id IN ({placeholders}) "
+                f"GROUP BY session_id",
+                session_ids,
+            )
+            rows = await cursor.fetchall()
+            return {
+                row["session_id"]: (row["full_text"] or "")[:max_chars]
+                for row in rows
+            }
+        except aiosqlite.Error as e:
+            raise DatabaseError(f"Failed to get session previews: {e}") from e
+
     async def filter_sessions(
         self,
         session_ids: list[int] | None = None,

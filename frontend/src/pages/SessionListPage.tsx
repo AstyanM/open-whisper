@@ -1,34 +1,45 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, FileText, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { DeleteSessionDialog } from "@/components/DeleteSessionDialog";
 import { SessionSearchBar } from "@/components/SessionSearchBar";
 import { fetchSessions, deleteSession, searchSessions } from "@/lib/api";
-import { LANGUAGES } from "@/lib/constants";
+import {
+  formatDuration,
+  formatRelativeDate,
+  formatDate,
+  languageLabel,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SessionSummary, SearchFilters } from "@/lib/api";
 
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "--:--";
-  const totalSec = Math.floor(seconds);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, "0")}`;
-}
-
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(iso));
-}
-
-function languageLabel(code: string): string {
-  return LANGUAGES.find((l) => l.code === code)?.label ?? code;
+function SessionCardSkeleton() {
+  return (
+    <Card className="mb-3">
+      <CardContent className="flex items-center justify-between py-3">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-24 rounded-full" />
+            <Skeleton className="h-4 w-10" />
+          </div>
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-3 w-56" />
+        </div>
+        <Skeleton className="h-8 w-8 rounded" />
+      </CardContent>
+    </Card>
+  );
 }
 
 export function SessionListPage() {
@@ -46,8 +57,6 @@ export function SessionListPage() {
     [filters],
   );
 
-  // Trigger a new fetch when filters or fetchId change.
-  // Loading/error are reset via the event handlers that change filters/fetchId.
   useEffect(() => {
     let cancelled = false;
     const hasFilters = Object.values(filters).some(
@@ -87,15 +96,12 @@ export function SessionListPage() {
   }, []);
 
   async function handleDelete(id: number) {
-    // Phase 1: slide out
     setDeletingIds((prev) => new Set(prev).add(id));
     await new Promise((r) => setTimeout(r, 300));
 
-    // Phase 2: collapse height
     setCollapsingIds((prev) => new Set(prev).add(id));
     await new Promise((r) => setTimeout(r, 300));
 
-    // Remove from state
     setSessions((prev) => prev.filter((s) => s.id !== id));
     setDeletingIds((prev) => {
       const next = new Set(prev);
@@ -108,7 +114,6 @@ export function SessionListPage() {
       return next;
     });
 
-    // Backend call
     try {
       await deleteSession(id);
       toast.success("Session deleted");
@@ -122,8 +127,10 @@ export function SessionListPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SessionSearchBar onFiltersChange={handleFiltersChange} />
-        <div className="py-12 text-center text-muted-foreground">
-          Loading...
+        <div>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SessionCardSkeleton key={i} />
+          ))}
         </div>
       </div>
     );
@@ -133,9 +140,10 @@ export function SessionListPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SessionSearchBar onFiltersChange={handleFiltersChange} />
-        <div className="py-12 text-center">
+        <div className="py-12 text-center space-y-3">
+          <AlertCircle className="mx-auto h-10 w-10 text-destructive/60" />
           <p className="text-destructive">{error}</p>
-          <Button variant="ghost" className="mt-4" onClick={reload}>
+          <Button variant="ghost" onClick={reload}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Retry
           </Button>
@@ -148,16 +156,23 @@ export function SessionListPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SessionSearchBar onFiltersChange={handleFiltersChange} />
-        <div className="py-12 text-center">
+        <div className="py-12 text-center space-y-3">
           {isSearching ? (
             <>
-              <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+              <div className="mx-auto rounded-full bg-muted p-3 w-fit">
+                <Search className="h-8 w-8 text-muted-foreground" />
+              </div>
               <p className="text-muted-foreground">No matching sessions</p>
             </>
           ) : (
             <>
-              <FileText className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+              <div className="mx-auto rounded-full bg-muted p-3 w-fit">
+                <FileText className="h-8 w-8 text-muted-foreground" />
+              </div>
               <p className="text-muted-foreground">No sessions yet</p>
+              <p className="text-xs text-muted-foreground/60">
+                Start a transcription to create your first session
+              </p>
             </>
           )}
         </div>
@@ -168,6 +183,15 @@ export function SessionListPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <SessionSearchBar onFiltersChange={handleFiltersChange} />
+
+      {/* Session count */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">
+          {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+          {isSearching ? " found" : ""}
+        </span>
+      </div>
+
       <div>
         {sessions.map((s) => {
           const isDeleting = deletingIds.has(s.id);
@@ -197,7 +221,7 @@ export function SessionListPage() {
                   onClick={() => navigate(`/sessions/${s.id}`)}
                 >
                   <CardContent className="flex items-center justify-between py-3">
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary">
                           {languageLabel(s.language)}
@@ -215,9 +239,21 @@ export function SessionListPage() {
                           {formatDuration(s.duration_s)}
                         </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(s.started_at)}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-xs text-muted-foreground">
+                            {formatRelativeDate(s.started_at)}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="start">
+                          {formatDate(s.started_at)}
+                        </TooltipContent>
+                      </Tooltip>
+                      {s.preview && (
+                        <p className="truncate text-xs text-muted-foreground/70">
+                          {s.preview}
+                        </p>
+                      )}
                     </div>
                     <div onClick={(e) => e.stopPropagation()}>
                       <DeleteSessionDialog

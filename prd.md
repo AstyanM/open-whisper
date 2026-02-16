@@ -21,6 +21,7 @@ Deux modes d'utilisation :
 | Transcription de réunion | Transcription | Session longue avec plusieurs interlocuteurs. Historique complet horodaté.                 |
 | Transcription d'appel    | Transcription | Capturer une conversation téléphonique/visio avec résumé automatique.                      |
 | Prise de notes vocales   | Transcription | Dicter des idées en continu, retrouver le texte plus tard via recherche.                   |
+| Transcription de fichier | Fichier audio | Déposer un fichier audio (mp3, wav, m4a, ogg, flac…) et obtenir la transcription complète. |
 
 ---
 
@@ -80,6 +81,7 @@ Deux modes d'utilisation :
 
 | Feature             | Description                                                                  | Priorité |
 | ------------------- | ---------------------------------------------------------------------------- | -------- |
+| Fichier audio       | Déposer/importer un fichier audio (mp3, wav, m4a, ogg, flac) pour transcription offline | Haute    |
 | Résumé automatique  | LLM local (Mistral 7B Q4, CPU) résume chaque session en fin d'enregistrement | Haute    |
 | Recherche full-text | Recherche dans l'historique des transcriptions (SQLite FTS5)                 | Haute    |
 | Export              | Markdown, TXT, SRT (sous-titres)                                             | Moyenne  |
@@ -158,12 +160,24 @@ Deux modes d'utilisation :
 6. Sauvegarde continue en SQLite (segments horodatés)
 7. Arrêt → session finalisée, prête pour résumé (V2)
 
+#### Mode fichier audio
+
+1. L'utilisateur dépose (drag & drop) ou sélectionne un fichier audio depuis l'interface
+2. Le frontend uploade le fichier vers le backend via `POST /api/transcribe/file` (multipart/form-data)
+3. Le backend décode le fichier audio (ffmpeg ou pydub) en PCM 16kHz mono
+4. Le backend lance la transcription complète via faster-whisper (mode non-streaming)
+5. Les segments horodatés sont renvoyés au frontend (réponse JSON ou streaming SSE pour la progression)
+6. Une session est créée en SQLite avec mode `file` et les segments associés
+7. Le fichier source n'est pas conservé sur disque (traitement en mémoire uniquement)
+
+Formats supportés : WAV, MP3, M4A, OGG, FLAC, WEBM, WMA. Taille max configurable (défaut : 500 Mo).
+
 ### 4.3 Modèle de données (SQLite)
 
 ```sql
 CREATE TABLE sessions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    mode        TEXT NOT NULL,          -- 'dictation' | 'transcription'
+    mode        TEXT NOT NULL,          -- 'dictation' | 'transcription' | 'file'
     language    TEXT NOT NULL DEFAULT 'fr',
     started_at  DATETIME NOT NULL,
     ended_at    DATETIME,
@@ -403,11 +417,12 @@ openwhisper/
 
 ### Phase 5 — V2
 
-26. Intégration Mistral 7B pour résumés automatiques
-27. Recherche full-text (FTS5)
-28. Export Markdown/TXT/SRT
-29. Diarisation (si modèle disponible)
-30. Commandes vocales
+26. Transcription de fichier audio (drag & drop, upload, formats multiples, progression)
+27. Intégration Mistral 7B pour résumés automatiques
+28. Recherche full-text (FTS5)
+29. Export Markdown/TXT/SRT
+30. Diarisation (si modèle disponible)
+31. Commandes vocales
 
 ---
 

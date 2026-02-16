@@ -125,7 +125,7 @@ export function OverlayPage() {
 
   // Recording duration timer
   const [elapsed, setElapsed] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   /** Apply an overlay config payload to all state variables. */
   function applyConfig(cfg: OverlayConfigPayload) {

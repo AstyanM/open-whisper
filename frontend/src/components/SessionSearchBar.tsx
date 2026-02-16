@@ -9,7 +9,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LANGUAGES } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import type { SearchFilters } from "@/lib/api";
 
 interface SessionSearchBarProps {
@@ -70,14 +76,18 @@ export function SessionSearchBar({ onFiltersChange }: SessionSearchBarProps) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Button
-          variant={showFilters || hasAdvancedFilters ? "secondary" : "ghost"}
-          size="icon"
-          onClick={() => setShowFilters(!showFilters)}
-          title="Filters"
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showFilters || hasAdvancedFilters ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Filters</TooltipContent>
+        </Tooltip>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearAll}>
             <X className="mr-1 h-4 w-4" />
@@ -86,77 +96,84 @@ export function SessionSearchBar({ onFiltersChange }: SessionSearchBarProps) {
         )}
       </div>
 
-      {/* Filter row (collapsible) */}
-      {showFilters && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={language}
-            onValueChange={(v) => setLanguage(v === "all" ? "" : v)}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Language" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All languages</SelectItem>
-              {LANGUAGES.map((l) => (
-                <SelectItem key={l.code} value={l.code}>
-                  {l.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Filter row (animated collapsible) */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-in-out",
+          showFilters ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 pb-1">
+            <Select
+              value={language}
+              onValueChange={(v) => setLanguage(v === "all" ? "" : v)}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Language" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All languages</SelectItem>
+                {LANGUAGES.map((l) => (
+                  <SelectItem key={l.code} value={l.code}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select
-            value={mode}
-            onValueChange={(v) => setMode(v === "all" ? "" : v)}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Mode" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All modes</SelectItem>
-              <SelectItem value="transcription">Transcription</SelectItem>
-              <SelectItem value="dictation">Dictation</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select
+              value={mode}
+              onValueChange={(v) => setMode(v === "all" ? "" : v)}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All modes</SelectItem>
+                <SelectItem value="transcription">Transcription</SelectItem>
+                <SelectItem value="dictation">Dictation</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              placeholder="Min (min)"
-              className="w-[100px]"
-              min={0}
-              value={durationMin}
-              onChange={(e) => setDurationMin(e.target.value)}
-            />
-            <span className="text-xs text-muted-foreground">-</span>
-            <Input
-              type="number"
-              placeholder="Max (min)"
-              className="w-[100px]"
-              min={0}
-              value={durationMax}
-              onChange={(e) => setDurationMax(e.target.value)}
-            />
-          </div>
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                placeholder="Min (min)"
+                className="w-[100px]"
+                min={0}
+                value={durationMin}
+                onChange={(e) => setDurationMin(e.target.value)}
+              />
+              <span className="text-xs text-muted-foreground">-</span>
+              <Input
+                type="number"
+                placeholder="Max (min)"
+                className="w-[100px]"
+                min={0}
+                value={durationMax}
+                onChange={(e) => setDurationMax(e.target.value)}
+              />
+            </div>
 
-          <div className="flex items-center gap-1">
-            <Input
-              type="date"
-              className="w-[140px]"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-            <span className="text-xs text-muted-foreground">-</span>
-            <Input
-              type="date"
-              className="w-[140px]"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                className="w-[140px]"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <span className="text-xs text-muted-foreground">-</span>
+              <Input
+                type="date"
+                className="w-[140px]"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

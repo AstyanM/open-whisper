@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Copy, Check } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { AlertCircle, ChevronRight, Copy, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,38 +11,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { DeleteSessionDialog } from "@/components/DeleteSessionDialog";
 import { fetchSession, deleteSession } from "@/lib/api";
-import { LANGUAGES } from "@/lib/constants";
+import {
+  formatDuration,
+  formatDateLong,
+  formatMs,
+  languageLabel,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SessionDetail } from "@/lib/api";
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "--:--";
-  const totalSec = Math.floor(seconds);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, "0")}`;
-}
-
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "long",
-    timeStyle: "medium",
-  }).format(new Date(iso));
-}
-
-function formatMs(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  const millis = ms % 1000;
-  return `${min}:${sec.toString().padStart(2, "0")}.${millis.toString().padStart(3, "0")}`;
-}
-
-function languageLabel(code: string): string {
-  return LANGUAGES.find((l) => l.code === code)?.label ?? code;
-}
 
 export function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -88,21 +72,53 @@ export function SessionDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center text-muted-foreground">
-        Loading...
+      <div className="mx-auto max-w-2xl space-y-4">
+        {/* Breadcrumb skeleton */}
+        <Skeleton className="h-4 w-40" />
+        {/* Metadata skeleton */}
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-28 rounded-full" />
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        {/* Full text card skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-20" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-4/5" />
+          </CardContent>
+        </Card>
+        {/* Segments skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3 rounded-md p-2">
+                <Skeleton className="h-4 w-24 shrink-0" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center">
+      <div className="mx-auto max-w-2xl py-12 text-center space-y-3">
+        <AlertCircle className="mx-auto h-10 w-10 text-destructive/60" />
         <p className="text-destructive">{error}</p>
-        <Button
-          variant="ghost"
-          className="mt-4"
-          onClick={() => window.location.reload()}
-        >
+        <Button variant="ghost" onClick={() => window.location.reload()}>
+          <RefreshCw className="mr-2 h-4 w-4" />
           Retry
         </Button>
       </div>
@@ -111,14 +127,12 @@ export function SessionDetailPage() {
 
   if (notFound || !data) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center">
+      <div className="mx-auto max-w-2xl py-12 text-center space-y-3">
+        <div className="mx-auto rounded-full bg-muted p-3 w-fit">
+          <AlertCircle className="h-8 w-8 text-muted-foreground" />
+        </div>
         <p className="text-muted-foreground">Session not found</p>
-        <Button
-          variant="ghost"
-          className="mt-4"
-          onClick={() => navigate("/sessions")}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
+        <Button variant="ghost" onClick={() => navigate("/sessions")}>
           Back to sessions
         </Button>
       </div>
@@ -129,13 +143,26 @@ export function SessionDetailPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      {/* Header */}
+      {/* Breadcrumbs + Delete */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate("/sessions")}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Sessions
-        </Button>
-        <DeleteSessionDialog onConfirm={handleDelete} />
+        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Link
+            to="/sessions"
+            className="hover:text-foreground transition-colors"
+          >
+            Sessions
+          </Link>
+          <ChevronRight className="h-3.5 w-3.5" />
+          <span className="text-foreground">Session #{id}</span>
+        </nav>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <DeleteSessionDialog onConfirm={handleDelete} />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>Delete this session</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Metadata */}
@@ -153,7 +180,7 @@ export function SessionDetailPage() {
         </span>
         <Separator orientation="vertical" className="h-4" />
         <span className="text-sm text-muted-foreground">
-          {formatDate(session.started_at)}
+          {formatDateLong(session.started_at)}
         </span>
       </div>
 
@@ -161,14 +188,19 @@ export function SessionDetailPage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Full text</CardTitle>
-          <Button variant="ghost" size="sm" onClick={handleCopy}>
-            {copied ? (
-              <Check className="mr-2 h-4 w-4" />
-            ) : (
-              <Copy className="mr-2 h-4 w-4" />
-            )}
-            {copied ? "Copied" : "Copy"}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm" onClick={handleCopy}>
+                {copied ? (
+                  <Check className="mr-2 h-4 w-4" />
+                ) : (
+                  <Copy className="mr-2 h-4 w-4" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Copy full text to clipboard</TooltipContent>
+          </Tooltip>
         </CardHeader>
         <CardContent>
           <p className="whitespace-pre-wrap text-sm leading-relaxed">
@@ -200,7 +232,7 @@ export function SessionDetailPage() {
               >
                 <span className="shrink-0 font-mono text-xs text-amber-600 dark:text-amber-400">
                   {formatMs(seg.start_ms)}
-                  {seg.end_ms != null && ` → ${formatMs(seg.end_ms)}`}
+                  {seg.end_ms != null && ` \u2192 ${formatMs(seg.end_ms)}`}
                 </span>
                 <span className="text-sm">{seg.text}</span>
               </div>

@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
-import { Mic, Square, Keyboard, Play } from "lucide-react";
+import { AlertCircle, Mic, Square, Keyboard, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { TranscriptionView } from "@/components/TranscriptionView";
@@ -71,30 +76,47 @@ export function TranscriptionPage() {
         </div>
 
         {isTranscribing ? (
-          <Button
-            variant="destructive"
-            onClick={stop}
-            disabled={state === "finalizing"}
-          >
-            <Square className="mr-2 h-4 w-4" />
-            Stop
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="destructive"
+                onClick={stop}
+                disabled={state === "finalizing"}
+              >
+                <Square className="mr-2 h-4 w-4" />
+                Stop
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Stop recording (Ctrl+Shift+T)</TooltipContent>
+          </Tooltip>
         ) : (
           <div className="flex items-center gap-2">
             {hasText && (
-              <Button onClick={() => resume(language)} disabled={isDictating}>
-                <Play className="mr-2 h-4 w-4" />
-                Continue
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={() => resume(language)} disabled={isDictating}>
+                    <Play className="mr-2 h-4 w-4" />
+                    Continue
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Resume transcription (Ctrl+Shift+T)</TooltipContent>
+              </Tooltip>
             )}
-            <Button
-              variant={hasText ? "outline" : "default"}
-              onClick={() => start(language)}
-              disabled={isDictating}
-            >
-              <Mic className="mr-2 h-4 w-4" />
-              {hasText ? "New" : "Start"}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={hasText ? "outline" : "default"}
+                  onClick={() => start(language)}
+                  disabled={isDictating}
+                >
+                  <Mic className="mr-2 h-4 w-4" />
+                  {hasText ? "New" : "Start"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {hasText ? "Start new session" : "Start transcription (Ctrl+Shift+T)"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
       </div>
@@ -104,13 +126,14 @@ export function TranscriptionPage() {
         text={liveText}
         state={state}
         elapsedMs={elapsedMs}
-        modelLabel={modelInfo ? `${modelInfo.engine} · ${modelInfo.model} · ${modelInfo.device}` : null}
+        modelLabel={modelInfo ? `${modelInfo.engine} \u00b7 ${modelInfo.model} \u00b7 ${modelInfo.device}` : null}
       />
 
       {/* Error display */}
       {(error || dictation.error) && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {error || dictation.error}
+        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error || dictation.error}</span>
         </div>
       )}
     </div>

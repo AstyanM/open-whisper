@@ -206,24 +206,17 @@ async def list_sessions(limit: int = 50, offset: int = 0):
     """List all transcription sessions, most recent first."""
     repo = _get_repo()
     sessions = await repo.list_sessions(limit=limit, offset=offset)
+    previews = await repo.get_session_previews([s.id for s in sessions])
     return {
         "sessions": [
-            {
-                "id": s.id,
-                "mode": s.mode,
-                "language": s.language,
-                "started_at": s.started_at,
-                "ended_at": s.ended_at,
-                "duration_s": s.duration_s,
-                "created_at": s.created_at,
-            }
+            _session_to_dict(s, preview=previews.get(s.id, ""))
             for s in sessions
         ]
     }
 
 
-def _session_to_dict(s) -> dict:
-    return {
+def _session_to_dict(s, preview: str | None = None) -> dict:
+    d = {
         "id": s.id,
         "mode": s.mode,
         "language": s.language,
@@ -232,6 +225,9 @@ def _session_to_dict(s) -> dict:
         "duration_s": s.duration_s,
         "created_at": s.created_at,
     }
+    if preview is not None:
+        d["preview"] = preview
+    return d
 
 
 @router.get("/api/sessions/search")
@@ -286,7 +282,8 @@ async def search_sessions_endpoint(
         offset=offset,
     )
 
-    return {"sessions": [_session_to_dict(s) for s in sessions]}
+    previews = await repo.get_session_previews([s.id for s in sessions])
+    return {"sessions": [_session_to_dict(s, preview=previews.get(s.id, "")) for s in sessions]}
 
 
 @router.get("/api/sessions/{session_id}")

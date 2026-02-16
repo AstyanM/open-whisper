@@ -8,9 +8,11 @@ import {
   Layers,
   Zap,
   Wrench,
+  AlertCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -29,6 +31,11 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { MicTest } from "@/components/MicTest";
 import { useSettings } from "@/hooks/useSettings";
@@ -47,6 +54,22 @@ const OVERLAY_SIZES: { value: OverlayConfig["size"]; label: string }[] = [
   { value: "medium", label: "Medium" },
 ];
 
+function RestartBadge() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant="outline"
+          className="ml-2 text-[10px] text-yellow-600 dark:text-yellow-400 border-yellow-500/30"
+        >
+          Restart
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>Changing this requires a restart to take effect</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function SettingsPage() {
   const {
     draft,
@@ -62,7 +85,7 @@ export function SettingsPage() {
   } = useSettings();
 
   const [showSuccess, setShowSuccess] = useState(false);
-  const successTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const successTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleSave = useCallback(async () => {
     await save();
@@ -79,52 +102,27 @@ export function SettingsPage() {
     );
   }
 
-  /** Convenience updater for a nested field. */
+  /** Convenience updater for a nested field (object sections only). */
   function set<K extends keyof AppConfig>(
     section: K,
     patch: Partial<AppConfig[K]>,
   ) {
     updateDraft((prev) => ({
       ...prev,
-      [section]: { ...prev[section], ...patch },
+      [section]: { ...(prev[section] as object), ...patch },
     }));
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6 pb-20">
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Settings</h2>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={reset}
-            disabled={!isDirty || saving}
-          >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-          <Button
-            size="sm"
-            className="bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-stone-900 dark:hover:bg-amber-400"
-            onClick={handleSave}
-            disabled={!isDirty || saving}
-          >
-            {saving ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save
-          </Button>
-        </div>
-      </div>
+      <h2 className="text-xl font-semibold">Settings</h2>
 
       {/* ── Banners ────────────────────────────────────────── */}
       {error && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
+        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
       {showSuccess && (
@@ -182,12 +180,15 @@ export function SettingsPage() {
             Audio
           </CardTitle>
           <CardDescription>
-            Microphone and capture settings. Device changes require a restart.
+            Microphone and capture settings.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label>Input device</Label>
+            <div className="flex items-center">
+              <Label>Input device</Label>
+              <RestartBadge />
+            </div>
             <Select
               value={draft.audio.device}
               onValueChange={(v) => set("audio", { device: v })}
@@ -207,7 +208,10 @@ export function SettingsPage() {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label>Chunk duration (ms)</Label>
+            <div className="flex items-center">
+              <Label>Chunk duration (ms)</Label>
+              <RestartBadge />
+            </div>
             <Input
               type="number"
               className="w-24"
@@ -356,13 +360,15 @@ export function SettingsPage() {
             Transcription
           </CardTitle>
           <CardDescription>
-            Whisper model and transcription parameters. Model/device/compute
-            changes require a restart.
+            Whisper model and transcription parameters.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label>Model size</Label>
+            <div className="flex items-center">
+              <Label>Model size</Label>
+              <RestartBadge />
+            </div>
             <Select
               value={draft.models.transcription.model_size}
               onValueChange={(v) =>
@@ -390,7 +396,10 @@ export function SettingsPage() {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label>Device</Label>
+            <div className="flex items-center">
+              <Label>Device</Label>
+              <RestartBadge />
+            </div>
             <Select
               value={draft.models.transcription.device}
               onValueChange={(v) =>
@@ -414,7 +423,10 @@ export function SettingsPage() {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label>Compute type</Label>
+            <div className="flex items-center">
+              <Label>Compute type</Label>
+              <RestartBadge />
+            </div>
             <Select
               value={draft.models.transcription.compute_type}
               onValueChange={(v) =>
@@ -598,7 +610,7 @@ export function SettingsPage() {
               code-switching). Leave empty for automatic context chaining.
             </p>
             <Input
-              placeholder="e.g. Bonjour, ceci est une transcription en français."
+              placeholder="e.g. Bonjour, ceci est une transcription en fran\u00e7ais."
               value={draft.models.transcription.initial_prompt ?? ""}
               onChange={(e) =>
                 set("models", {
@@ -679,6 +691,41 @@ export function SettingsPage() {
           <InfoRow label="Database" value={draft.storage.db_path} />
         </CardContent>
       </Card>
+
+      {/* ── Sticky save bar ────────────────────────────────── */}
+      {isDirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-sm px-6 py-3 animate-in slide-in-from-bottom duration-200">
+          <div className="mx-auto flex max-w-2xl items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              You have unsaved changes
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={reset}
+                disabled={saving}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
+              <Button
+                size="sm"
+                className="bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-stone-900 dark:hover:bg-amber-400"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
