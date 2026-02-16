@@ -1,11 +1,12 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Mic, History } from "lucide-react";
+import { Mic, History, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 
 const navItems = [
   { to: "/", label: "Transcription", icon: Mic },
   { to: "/sessions", label: "Sessions", icon: History },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Layout() {

@@ -62,6 +62,22 @@ async def test_stream_raises_on_no_device():
 
 
 @pytest.mark.asyncio
+async def test_stream_raises_on_query_device_error():
+    """Test that 'Error querying device -1' raises AudioDeviceNotFoundError."""
+    import sounddevice as sd
+
+    capture = AudioCapture()
+
+    with patch(
+        "src.audio.capture.sd.InputStream",
+        side_effect=sd.PortAudioError("Error querying device -1"),
+    ):
+        with pytest.raises(AudioDeviceNotFoundError):
+            async for _ in capture.stream():
+                pass
+
+
+@pytest.mark.asyncio
 async def test_stream_raises_generic_device_error():
     """Test that generic PortAudio errors raise AudioDeviceError."""
     import sounddevice as sd

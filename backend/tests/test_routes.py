@@ -66,9 +66,14 @@ async def test_get_config(client):
     resp = await client.get("/api/config")
     assert resp.status_code == 200
     data = resp.json()
+    # Full config is now returned (not just a subset)
     assert "language" in data
     assert "audio" in data
     assert "models" in data
+    assert "shortcuts" in data
+    assert "overlay" in data
+    assert "storage" in data
+    assert "backend" in data
 
 
 @pytest.mark.asyncio
@@ -121,3 +126,100 @@ async def test_delete_session_success(client, db):
 
     resp = await client.get(f"/api/sessions/{session_id}")
     assert resp.status_code == 404
+
+
+# ── PUT /api/config tests ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_update_config_language(client, tmp_path):
+    """PUT /api/config updates language and categorises it as applied."""
+    import src.main
+    from src.config import AppConfig
+
+    src.main.config = AppConfig.model_validate({})
+
+    # Write a temp config.yaml for the endpoint to persist to
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("language: fr\n", encoding="utf-8")
+
+    from unittest.mock import patch
+
+    with patch("src.api.routes.find_config_path", return_value=config_file):
+        resp = await client.put("/api/config", json={"language": "en"})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert "language" in data["applied"]
+    assert src.main.config.language == "en"
+
+
+@pytest.mark.asyncio
+async def test_update_config_invalid_delay(client):
+    """PUT /api/config rejects out-of-range delay_ms with 422."""
+    import src.main
+    from src.config import AppConfig
+
+    src.main.config = AppConfig.model_validate({})
+
+    resp = await client.put(
+        "/api/config",
+        json={"models": {"transcription": {"delay_ms": 10}}},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_config_restart_required(client, tmp_path):
+    """PUT /api/config flags audio.device as restart_required."""
+    import src.main
+    from src.config import AppConfig
+
+    src.main.config = AppConfig.model_validate({})
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("language: fr\n", encoding="utf-8")
+
+    from unittest.mock import patch
+
+    with patch("src.api.routes.find_config_path", return_value=config_file):
+        resp = await client.put(
+            "/api/config", json={"audio": {"device": "my-mic"}}
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "audio.device" in data["restart_required"]
+
+
+@pytest.mark.asyncio
+async def test_update_config_returns_503_when_not_loaded(client):
+    """PUT /api/config returns 503 when config hasn't been loaded."""
+    import src.main
+
+    src.main.config = None
+
+    resp = await client.put("/api/config", json={"language": "en"})
+    assert resp.status_code == 503
+
+
+# ── GET /api/audio/devices ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_list_audio_devices(client):
+    """GET /api/audio/devices returns a list of devices."""
+    from unittest.mock import patch
+
+    mock_devices = [
+        {"index": 0, "name": "Test Mic", "channels": 1, "sample_rate": 16000.0}
+    ]
+    with patch("src.api.routes.AudioCapture.list_devices", return_value=mock_devices):
+        resp = await client.get("/api/audio/devices")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "devices" in data
+    assert len(data["devices"]) == 1
+    assert data["devices"][0]["name"] == "Test Mic"

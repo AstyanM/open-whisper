@@ -64,3 +64,97 @@ export async function deleteSession(id: number): Promise<void> {
   });
   if (!res.ok) throw new Error("Failed to delete session");
 }
+
+// ── Config types ───────────────────────────────────────────────────
+
+export interface ShortcutsConfig {
+  toggle_dictation: string;
+  toggle_transcription: string;
+}
+
+export interface TranscriptionModelConfig {
+  name: string;
+  quantization: string;
+  delay_ms: number;
+  vllm_port: number;
+}
+
+export interface ModelsConfig {
+  transcription: TranscriptionModelConfig;
+}
+
+export interface AudioConfig {
+  sample_rate: number;
+  channels: number;
+  device: string;
+  chunk_duration_ms: number;
+}
+
+export interface OverlayConfig {
+  enabled: boolean;
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  opacity: number;
+  size: "small" | "medium";
+}
+
+export interface StorageConfig {
+  db_path: string;
+}
+
+export interface BackendConfig {
+  host: string;
+  port: number;
+}
+
+export interface AppConfig {
+  language: string;
+  shortcuts: ShortcutsConfig;
+  models: ModelsConfig;
+  audio: AudioConfig;
+  overlay: OverlayConfig;
+  storage: StorageConfig;
+  backend: BackendConfig;
+}
+
+export interface AudioDevice {
+  index: number;
+  name: string;
+  channels: number;
+  sample_rate: number;
+}
+
+export interface UpdateConfigResult {
+  status: string;
+  applied: string[];
+  restart_required: string[];
+}
+
+// ── Config API ─────────────────────────────────────────────────────
+
+export async function fetchFullConfig(): Promise<AppConfig> {
+  const res = await fetch(`${BACKEND_URL}/api/config`);
+  if (!res.ok) throw new Error("Failed to fetch config");
+  return res.json();
+}
+
+export async function updateConfig(
+  config: Partial<AppConfig>,
+): Promise<UpdateConfigResult> {
+  const res = await fetch(`${BACKEND_URL}/api/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to update config" }));
+    throw new Error(err.detail ?? "Failed to update config");
+  }
+  return res.json();
+}
+
+export async function fetchAudioDevices(): Promise<AudioDevice[]> {
+  const res = await fetch(`${BACKEND_URL}/api/audio/devices`);
+  if (!res.ok) throw new Error("Failed to fetch audio devices");
+  const data = await res.json();
+  return data.devices;
+}

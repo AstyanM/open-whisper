@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { TranscriptionPage } from "@/pages/TranscriptionPage";
 import { SessionListPage } from "@/pages/SessionListPage";
 import { SessionDetailPage } from "@/pages/SessionDetailPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 import { OverlayPage } from "@/pages/OverlayPage";
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
           <Route path="/" element={<TranscriptionPage />} />
           <Route path="/sessions" element={<SessionListPage />} />
           <Route path="/sessions/:id" element={<SessionDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

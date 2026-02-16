@@ -78,9 +78,13 @@ class AudioCapture:
             self._stream.start()
         except sd.PortAudioError as e:
             error_msg = str(e).lower()
-            if "no" in error_msg and "device" in error_msg:
+            if (
+                ("no" in error_msg and "device" in error_msg)
+                or "error querying device" in error_msg
+            ):
                 raise AudioDeviceNotFoundError(
-                    f"Audio input device not found: {e}"
+                    f"Audio input device not found (check that a microphone "
+                    f"is connected): {e}"
                 ) from e
             raise AudioDeviceError(f"Audio device error: {e}") from e
 

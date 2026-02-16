@@ -75,6 +75,12 @@ async def websocket_transcribe(websocket: WebSocket):
                 )
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
+    except RuntimeError as e:
+        # Starlette raises RuntimeError when trying to receive after disconnect
+        if "disconnect" in str(e).lower():
+            logger.info("WebSocket client disconnected")
+        else:
+            logger.error(f"WebSocket error: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
         await _send_ws_error(websocket, str(e))

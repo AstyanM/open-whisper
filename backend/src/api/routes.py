@@ -4,8 +4,11 @@ import asyncio
 import logging
 
 import websockets
-from fastapi import APIRouter, HTTPException
+import yaml
+from fastapi import APIRouter, HTTPException, Request
 
+from src.audio.capture import AudioCapture
+from src.config import AppConfig, find_config_path
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
 
@@ -80,23 +83,112 @@ async def health_check():
 
 @router.get("/api/config")
 async def get_config():
-    """Return current (non-sensitive) configuration."""
+    """Return full application configuration."""
     from src.main import config
 
     if config is None:
         raise HTTPException(status_code=503, detail="Configuration not loaded")
-    return {
-        "language": config.language,
-        "audio": {
-            "sample_rate": config.audio.sample_rate,
-            "channels": config.audio.channels,
-            "chunk_duration_ms": config.audio.chunk_duration_ms,
-        },
-        "models": {
-            "transcription": config.models.transcription.name,
-            "delay_ms": config.models.transcription.delay_ms,
-        },
-    }
+    return config.model_dump()
+
+
+# Fields that take effect immediately without restart
+_HOT_RELOAD_PREFIXES = ("language", "overlay", "models.transcription.delay_ms")
+# Fields that require an application restart
+_RESTART_REQUIRED_PREFIXES = (
+    "audio.device",
+    "audio.chunk_duration_ms",
+    "backend.",
+    "storage.",
+    "models.transcription.vllm_port",
+)
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Deep merge *override* into *base*, returning a new dict."""
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _find_changed_paths(old: dict, new: dict, prefix: str = "") -> list[str]:
+    """Return dot-separated paths whose values differ between *old* and *new*."""
+    changed: list[str] = []
+    for key in set(old.keys()) | set(new.keys()):
+        path = f"{prefix}.{key}" if prefix else key
+        old_val = old.get(key)
+        new_val = new.get(key)
+        if isinstance(old_val, dict) and isinstance(new_val, dict):
+            changed.extend(_find_changed_paths(old_val, new_val, path))
+        elif old_val != new_val:
+            changed.append(path)
+    return changed
+
+
+@router.put("/api/config")
+async def update_config(request: Request):
+    """Validate, persist, and hot-reload configuration changes.
+
+    Accepts a partial JSON body.  Fields are deep-merged with the current
+    config, validated through Pydantic, written to ``config.yaml``, and
+    loaded into memory.  The response tells the caller which changes were
+    applied immediately and which require a restart.
+    """
+    import src.main
+
+    if src.main.config is None:
+        raise HTTPException(status_code=503, detail="Configuration not loaded")
+
+    body = await request.json()
+
+    current = src.main.config.model_dump()
+    merged = _deep_merge(current, body)
+
+    try:
+        new_config = AppConfig.model_validate(merged)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    changed = _find_changed_paths(current, new_config.model_dump())
+
+    applied = [
+        p for p in changed if any(p.startswith(pr) for pr in _HOT_RELOAD_PREFIXES)
+    ]
+    restart_required = [
+        p for p in changed if any(p.startswith(pr) for pr in _RESTART_REQUIRED_PREFIXES)
+    ]
+
+    # Persist to YAML
+    config_path = find_config_path()
+    with open(config_path, "w", encoding="utf-8") as fh:
+        yaml.dump(
+            new_config.model_dump(),
+            fh,
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+
+    # Update in-memory config
+    src.main.config = new_config
+
+    return {"status": "ok", "applied": applied, "restart_required": restart_required}
+
+
+@router.get("/api/audio/devices")
+async def list_audio_devices():
+    """List available audio input devices."""
+    try:
+        devices = AudioCapture.list_devices()
+    except Exception as exc:
+        logger.error("Failed to list audio devices: %s", exc)
+        raise HTTPException(
+            status_code=500, detail="Failed to enumerate audio devices"
+        )
+    return {"devices": devices}
 
 
 @router.get("/api/sessions")
