@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { listenEvent, isTauri, invokeCommand } from "@/lib/tauri";
+import { listenEvent, isTauri, invokeCommand, setWindowVisible } from "@/lib/tauri";
 import { fetchFullConfig } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -146,10 +146,15 @@ export function OverlayPage() {
     };
   }, []);
 
-  // Load initial overlay config from backend
+  // Load initial overlay config from backend — hide window if disabled
   useEffect(() => {
     fetchFullConfig()
-      .then((cfg) => applyConfig(cfg.overlay))
+      .then((cfg) => {
+        applyConfig(cfg.overlay);
+        if (!cfg.overlay.enabled) {
+          setWindowVisible("overlay", false);
+        }
+      })
       .catch(() => {});
   }, []);
 
