@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 import {
   fetchFullConfig,
@@ -6,7 +6,7 @@ import {
   fetchAudioDevices,
 } from "@/lib/api";
 import type { AppConfig, AudioDevice, UpdateConfigResult } from "@/lib/api";
-import { emitEvent } from "@/lib/tauri";
+import { emitEvent, setWindowVisible } from "@/lib/tauri";
 
 export interface UseSettingsReturn {
   /** Server-side config (last fetched). */
@@ -63,10 +63,42 @@ export function useSettings(): UseSettingsReturn {
     };
   }, []);
 
-  const isDirty = useMemo(
-    () => JSON.stringify(config) !== JSON.stringify(draft),
-    [config, draft],
-  );
+  // Overlay is auto-saved live, so exclude it from the dirty check
+  const isDirty = useMemo(() => {
+    if (!config || !draft) return false;
+    const { overlay: _co, ...configRest } = config;
+    const { overlay: _do, ...draftRest } = draft;
+    return JSON.stringify(configRest) !== JSON.stringify(draftRest);
+  }, [config, draft]);
+
+  // Live-apply + auto-save overlay changes (no Save button needed)
+  const prevOverlayJsonRef = useRef("");
+  useEffect(() => {
+    if (!draft || !config) return;
+    const overlayJson = JSON.stringify(draft.overlay);
+    // Initialize on first render — don't trigger
+    if (!prevOverlayJsonRef.current) {
+      prevOverlayJsonRef.current = overlayJson;
+      return;
+    }
+    // No change
+    if (overlayJson === prevOverlayJsonRef.current) return;
+    prevOverlayJsonRef.current = overlayJson;
+
+    // 1. Live preview via Tauri event
+    emitEvent("overlay-config-changed", draft.overlay);
+    // 2. Show/hide overlay window
+    setWindowVisible("overlay", draft.overlay.enabled);
+    // 3. Auto-persist overlay to backend
+    const toSave = { ...config, overlay: draft.overlay };
+    updateConfig(toSave)
+      .then(() => {
+        setConfig((prev) =>
+          prev ? { ...prev, overlay: structuredClone(draft.overlay) } : prev,
+        );
+      })
+      .catch(() => {});
+  }, [draft, config]);
 
   const updateDraft = useCallback(
     (updater: (prev: AppConfig) => AppConfig) => {
@@ -101,12 +133,7 @@ export function useSettings(): UseSettingsReturn {
       if (config && freshConfig.language !== config.language) {
         await emitEvent("language-changed", freshConfig.language);
       }
-      if (
-        config &&
-        JSON.stringify(freshConfig.overlay) !== JSON.stringify(config.overlay)
-      ) {
-        await emitEvent("overlay-config-changed", freshConfig.overlay);
-      }
+      // Note: overlay events are handled live via the dedicated useEffect
     } catch (err) {
       setError((err as Error).message);
     } finally {

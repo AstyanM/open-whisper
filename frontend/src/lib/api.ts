@@ -124,6 +124,9 @@ export interface OverlayConfig {
   position: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   opacity: number;
   size: "small" | "medium";
+  show_language: boolean;
+  show_mode: boolean;
+  show_duration: boolean;
 }
 
 export interface StorageConfig {

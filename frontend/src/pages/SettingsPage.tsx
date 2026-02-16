@@ -295,6 +295,33 @@ export function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="border-t pt-4 space-y-3">
+            <Label className="text-muted-foreground text-xs uppercase tracking-wide">
+              Display elements
+            </Label>
+            <div className="flex items-center justify-between">
+              <Label>Show language</Label>
+              <Switch
+                checked={draft.overlay.show_language}
+                onCheckedChange={(v) => set("overlay", { show_language: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Show active mode</Label>
+              <Switch
+                checked={draft.overlay.show_mode}
+                onCheckedChange={(v) => set("overlay", { show_mode: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label>Show recording duration</Label>
+              <Switch
+                checked={draft.overlay.show_duration}
+                onCheckedChange={(v) => set("overlay", { show_duration: v })}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 

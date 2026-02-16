@@ -49,6 +49,9 @@ class OverlayConfig(BaseModel):
     position: Literal["top-left", "top-right", "bottom-left", "bottom-right"] = "top-right"
     opacity: float = Field(default=0.85, ge=0.1, le=1.0)
     size: Literal["small", "medium"] = "small"
+    show_language: bool = True
+    show_mode: bool = False
+    show_duration: bool = False
 
 
 class StorageConfig(BaseModel):
