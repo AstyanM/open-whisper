@@ -248,3 +248,29 @@ export async function rewriteText(
   }
   return res.json();
 }
+
+// ── Scenario Processing ──────────────────────────────────────────
+
+export type Scenario = "summarize" | "todo_list" | "reformulate";
+
+export interface ProcessTextResult {
+  scenario: Scenario;
+  result: string;
+}
+
+export async function processText(
+  text: string,
+  scenario: Scenario,
+  language: string,
+): Promise<ProcessTextResult> {
+  const res = await fetch(`${BACKEND_URL}/api/llm/process`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, scenario, language }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Processing failed" }));
+    throw new Error(err.detail ?? "Processing failed");
+  }
+  return res.json();
+}

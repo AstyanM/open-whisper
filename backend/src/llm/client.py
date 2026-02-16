@@ -38,6 +38,41 @@ REWRITE_SYSTEM = (
 
 REWRITE_USER = "Rewrite the following text:\n\n{text}"
 
+# ── Scenario prompts ─────────────────────────────────────────────────
+
+SCENARIO_PROMPTS: dict[str, str] = {
+    "summarize": (
+        "You are a concise summarizer. Given a voice transcription, produce a clear "
+        "summary in 2-4 sentences. Focus on the key topics and main points discussed. "
+        "Do not add information that is not in the original text. "
+        "You MUST respond in {language}."
+    ),
+    "todo_list": (
+        "You are a task extraction assistant. Extract all actionable items from the "
+        "following voice transcription and format them as a structured to-do list. "
+        "Use markdown checkbox format (- [ ] task). Group related items if applicable. "
+        "Only include tasks that are explicitly or implicitly mentioned in the text. "
+        "Do not add tasks that are not in the original text. "
+        "You MUST respond in {language}."
+    ),
+    "reformulate": (
+        "You are a text editor. Rewrite this voice transcription to be cleaner and more "
+        "readable. Remove filler words (um, uh, like, you know), fix grammar errors, "
+        "remove repetitions and false starts, and clean up transcription artifacts. "
+        "Preserve the original meaning and all information. Do not add content. "
+        "You MUST respond in {language}."
+    ),
+}
+
+SCENARIO_USER = "Process the following transcription:\n\n{text}"
+
+_LANGUAGE_NAMES: dict[str, str] = {
+    "fr": "French", "en": "English", "es": "Spanish", "de": "German",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish",
+    "ru": "Russian", "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+    "ar": "Arabic",
+}
+
 
 # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -117,3 +152,27 @@ async def rewrite_text(text: str, instruction: str | None = None) -> str:
         system,
         REWRITE_USER.format(text=text),
     )
+
+
+async def process_text(text: str, scenario: str, language: str) -> str:
+    """Process transcription text with a scenario-specific LLM prompt.
+
+    Args:
+        text: The transcription text to process.
+        scenario: One of "summarize", "todo_list", "reformulate".
+        language: ISO 639-1 language code (e.g. "fr", "en").
+
+    Raises:
+        ValueError: If scenario is unknown.
+        LLMError: If LLM client is not available or request fails.
+    """
+    if not text.strip():
+        return ""
+    if scenario not in SCENARIO_PROMPTS:
+        raise ValueError(
+            f"Unknown scenario: {scenario}. "
+            f"Must be one of: {', '.join(SCENARIO_PROMPTS)}"
+        )
+    lang_name = _LANGUAGE_NAMES.get(language, language)
+    system_prompt = SCENARIO_PROMPTS[scenario].format(language=lang_name)
+    return await _chat_completion(system_prompt, SCENARIO_USER.format(text=text))
