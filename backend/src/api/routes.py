@@ -1,6 +1,7 @@
 """REST API routes for health check, config, and session management."""
 
 import logging
+import math
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +13,7 @@ from src.audio.capture import AudioCapture
 from src.config import AppConfig, find_config_path
 from src.storage.database import get_db
 from src.storage.repository import SessionRepository
-from src.search.vector_store import delete_session_embedding, search_sessions as chroma_search
+from src.search.vector_store import delete_session_embedding, index_session, search_sessions as chroma_search
 from src.llm.client import is_llm_available, summarize_text, rewrite_text, process_text, get_llm_config
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ _HOT_RELOAD_PREFIXES = (
     "models.transcription.device",
     "models.transcription.compute_type",
     "models.llm",
+    "search.distance_threshold",
 )
 # Fields that require an application restart
 _RESTART_REQUIRED_PREFIXES = (
@@ -237,7 +239,7 @@ async def list_sessions(limit: int = 50, offset: int = 0):
     }
 
 
-def _session_to_dict(s, preview: str | None = None) -> dict:
+def _session_to_dict(s, preview: str | None = None, relevance: float | None = None) -> dict:
     d = {
         "id": s.id,
         "mode": s.mode,
@@ -251,6 +253,8 @@ def _session_to_dict(s, preview: str | None = None) -> dict:
     }
     if preview is not None:
         d["preview"] = preview
+    if relevance is not None:
+        d["relevance"] = relevance
     return d
 
 
@@ -269,6 +273,7 @@ async def search_sessions_endpoint(
     """Search sessions with optional semantic query and metadata filters."""
     repo = _get_repo()
     session_ids = None
+    relevance_scores: dict[int, float] = {}
 
     if q.strip():
         # Build ChromaDB where clause for metadata pre-filtering
@@ -284,12 +289,22 @@ async def search_sessions_endpoint(
         elif len(where_clauses) > 1:
             chroma_where = {"$and": where_clauses}
 
+        # Load distance threshold from config
+        from src.main import config as app_config
+        threshold = app_config.search.distance_threshold if app_config else 0.75
+
         try:
-            session_ids = await chroma_search(
+            search_results = await chroma_search(
                 query=q.strip(),
                 n_results=limit + offset,
                 where=chroma_where,
+                distance_threshold=threshold,
             )
+            session_ids = [sid for sid, _ in search_results]
+            relevance_scores = {
+                sid: round(math.sqrt(max(0.0, 1.0 - d)), 4)
+                for sid, d in search_results
+            }
         except Exception as e:
             logger.warning(f"ChromaDB search failed, falling back to SQL: {e}")
             session_ids = None
@@ -307,7 +322,16 @@ async def search_sessions_endpoint(
     )
 
     previews = await repo.get_session_previews([s.id for s in sessions])
-    return {"sessions": [_session_to_dict(s, preview=previews.get(s.id, "")) for s in sessions]}
+    return {
+        "sessions": [
+            _session_to_dict(
+                s,
+                preview=previews.get(s.id, ""),
+                relevance=relevance_scores.get(s.id),
+            )
+            for s in sessions
+        ],
+    }
 
 
 @router.get("/api/sessions/{session_id}")
@@ -367,6 +391,21 @@ async def summarize_session(session_id: int):
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
     await repo.update_session_summary(session_id, summary)
+
+    # Re-index in ChromaDB with the summary for better search relevance
+    try:
+        await index_session(
+            session_id=session_id,
+            full_text=full_text,
+            summary=summary,
+            language=session.language,
+            mode=session.mode,
+            duration_s=session.duration_s,
+            started_at=session.started_at,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to re-index session {session_id} after summary: {e}")
+
     return {"session_id": session_id, "summary": summary}
 
 

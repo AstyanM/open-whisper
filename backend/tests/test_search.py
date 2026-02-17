@@ -15,6 +15,11 @@ from src.search.vector_store import (
 )
 
 
+def ids_from(results: list[tuple[int, float]]) -> list[int]:
+    """Extract session IDs from search results."""
+    return [sid for sid, _ in results]
+
+
 @pytest_asyncio.fixture
 async def vector_store(tmp_path):
     """Initialize a temporary ChromaDB store."""
@@ -45,7 +50,7 @@ async def test_index_and_search(vector_store):
 
     results = await search_sessions("business meeting about sales")
     assert len(results) == 2
-    assert results[0] == 1  # More relevant
+    assert ids_from(results)[0] == 1  # More relevant
 
 
 @pytest.mark.asyncio
@@ -113,7 +118,7 @@ async def test_search_with_language_filter(vector_store):
         where={"language": "en"},
     )
     assert len(results) == 1
-    assert results[0] == 2
+    assert ids_from(results)[0] == 2
 
 
 @pytest.mark.asyncio
@@ -145,7 +150,7 @@ async def test_upsert_updates_existing(vector_store):
     assert collection.count() == 1
 
     results = await search_sessions("dogs puppies")
-    assert results[0] == 1
+    assert ids_from(results)[0] == 1
 
 
 # ── Multilingual Embedding Function Tests ──────────────────────────────
@@ -293,8 +298,8 @@ async def test_french_search_relevance(vector_store):
 
     results = await search_sessions("audio d'une fille qui parle de médecine")
     assert len(results) == 3
-    assert results[0] == 1, (
-        f"Medical session should rank first, got session {results[0]}"
+    assert ids_from(results)[0] == 1, (
+        f"Medical session should rank first, got session {ids_from(results)[0]}"
     )
 
 
@@ -319,10 +324,10 @@ async def test_french_topic_search(vector_store):
     )
 
     results = await search_sessions("budget et ventes")
-    assert results[0] == 10
+    assert ids_from(results)[0] == 10
 
     results = await search_sessions("yoga relaxation")
-    assert results[0] == 11
+    assert ids_from(results)[0] == 11
 
 
 # ── Cross-Language Search Tests ────────────────────────────────────────
@@ -355,8 +360,8 @@ async def test_cross_language_search(vector_store):
     )
 
     results = await search_sessions("back pain physiotherapy doctor")
-    assert results[0] == 20, (
-        f"Medical session should rank first for English medical query, got {results[0]}"
+    assert ids_from(results)[0] == 20, (
+        f"Medical session should rank first for English medical query, got {ids_from(results)[0]}"
     )
 
 
@@ -410,3 +415,119 @@ async def test_model_change_detection(tmp_path):
     collection = get_collection()
     assert collection.count() == 0  # Collection was deleted
     await close_vector_store()
+
+
+# ── Distance Threshold Tests ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_search_returns_distances(vector_store):
+    """Search results should include distances, with relevant results having lower distances."""
+    await index_session(
+        session_id=1,
+        full_text="Machine learning and artificial intelligence research paper",
+        language="en",
+        mode="transcription",
+        duration_s=120.0,
+        started_at="2026-01-15T10:00:00Z",
+    )
+    await index_session(
+        session_id=2,
+        full_text="Cooking pasta with tomato sauce and basil",
+        language="en",
+        mode="transcription",
+        duration_s=60.0,
+        started_at="2026-01-16T10:00:00Z",
+    )
+
+    results = await search_sessions("deep learning neural networks")
+    assert len(results) == 2
+    # Each result is (session_id, distance)
+    for sid, dist in results:
+        assert isinstance(sid, int)
+        assert isinstance(dist, float)
+        assert 0.0 <= dist <= 2.0
+    # ML session should have lower distance (more relevant)
+    assert results[0][0] == 1
+    assert results[0][1] < results[1][1]
+
+
+@pytest.mark.asyncio
+async def test_distance_threshold_filters_irrelevant(vector_store):
+    """Results above distance threshold should be filtered out."""
+    await index_session(
+        session_id=1,
+        full_text="Discussion about medicine and healthcare treatments for patients",
+        language="en",
+        mode="transcription",
+        duration_s=120.0,
+        started_at="2026-01-15T10:00:00Z",
+    )
+    await index_session(
+        session_id=2,
+        full_text="Voice transcription settings and microphone configuration guide",
+        language="en",
+        mode="transcription",
+        duration_s=60.0,
+        started_at="2026-01-16T10:00:00Z",
+    )
+
+    # Without threshold: returns all results
+    all_results = await search_sessions("medicine")
+    assert len(all_results) == 2
+
+    # With strict threshold: should filter irrelevant results
+    filtered = await search_sessions("medicine", distance_threshold=0.5)
+    assert len(filtered) >= 1
+    assert filtered[0][0] == 1  # Medicine session first
+    for _, dist in filtered:
+        assert dist <= 0.5
+
+
+# ── Summary Indexing Tests ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_index_prefers_summary_over_full_text(vector_store):
+    """When a summary is provided, search should match on the summary."""
+    await index_session(
+        session_id=1,
+        full_text="Euh alors on a parlé de plein de trucs pendant une heure voilà quoi",
+        summary="Discussion sur les traitements médicaux et la santé des patients",
+        language="fr",
+        mode="transcription",
+        duration_s=300.0,
+        started_at="2026-01-15T10:00:00Z",
+    )
+    await index_session(
+        session_id=2,
+        full_text="On a discuté de la cuisine et des recettes de pâtisserie",
+        language="fr",
+        mode="transcription",
+        duration_s=200.0,
+        started_at="2026-01-16T10:00:00Z",
+    )
+
+    results = await search_sessions("médecine")
+    assert len(results) >= 1
+    assert results[0][0] == 1, "Session with medical summary should rank first"
+    # Medical session should be significantly more relevant
+    assert results[0][1] < results[1][1] if len(results) > 1 else True
+
+
+@pytest.mark.asyncio
+async def test_index_falls_back_to_full_text(vector_store):
+    """Without a summary, full text should be indexed."""
+    await index_session(
+        session_id=1,
+        full_text="Discussion about quantum computing and qubits",
+        summary=None,
+        language="en",
+        mode="transcription",
+        duration_s=120.0,
+        started_at="2026-01-15T10:00:00Z",
+    )
+
+    results = await search_sessions("quantum computing")
+    assert len(results) == 1
+    assert results[0][0] == 1

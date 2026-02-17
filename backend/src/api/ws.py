@@ -363,12 +363,27 @@ async def _handle_transcription_session(
 
 
 async def _auto_summarize(session_id: int, text: str, repo: SessionRepository, language: str = "en") -> None:
-    """Background task: generate and save a summary for a session."""
+    """Background task: generate and save a summary for a session, then re-index in ChromaDB."""
     try:
         summary = await summarize_text(text, language=language)
         if summary:
             await repo.update_session_summary(session_id, summary)
             logger.info(f"Auto-summary generated for session {session_id} ({len(summary)} chars)")
+            # Re-index in ChromaDB with the summary for better search relevance
+            try:
+                session = await repo.get_session(session_id)
+                if session:
+                    await index_session(
+                        session_id=session_id,
+                        full_text=text,
+                        summary=summary,
+                        language=session.language,
+                        mode=session.mode,
+                        duration_s=session.duration_s,
+                        started_at=session.started_at,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to re-index session {session_id} after summary: {e}")
     except Exception as e:
         logger.warning(f"Auto-summary failed for session {session_id}: {e}")
 

@@ -11,6 +11,7 @@ export interface SessionSummary {
   created_at: string;
   preview?: string;
   filename?: string | null;
+  relevance?: number;
 }
 
 export interface Segment {
@@ -166,6 +167,11 @@ export interface BackendConfig {
   port: number;
 }
 
+export interface SearchConfig {
+  embedding_model: string;
+  distance_threshold: number;
+}
+
 export interface AppConfig {
   language: string;
   max_upload_size_mb: number;
@@ -175,6 +181,7 @@ export interface AppConfig {
   overlay: OverlayConfig;
   storage: StorageConfig;
   backend: BackendConfig;
+  search: SearchConfig;
 }
 
 export interface AudioDevice {

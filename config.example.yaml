@@ -52,6 +52,9 @@ search:
   # paraphrase-multilingual-MiniLM-L12-v2 — 50+ languages, 384-dim (default)
   # all-MiniLM-L6-v2 — English-optimized, 384-dim (ChromaDB's original default)
   embedding_model: "paraphrase-multilingual-MiniLM-L12-v2"
+  # Maximum cosine distance for search results (0.0 = exact match, 2.0 = opposite)
+  # Lower values = stricter filtering. Recommended: 0.5-0.9
+  distance_threshold: 0.75
 
 # Audio capture settings
 audio:

@@ -157,6 +157,12 @@ class SearchConfig(BaseModel):
         default="paraphrase-multilingual-MiniLM-L12-v2",
         description="Sentence-transformers ONNX model for semantic search embeddings",
     )
+    distance_threshold: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=2.0,
+        description="Maximum cosine distance for search results (0=exact, 2=opposite). Results above this are filtered out.",
+    )
 
 
 class AppConfig(BaseModel):

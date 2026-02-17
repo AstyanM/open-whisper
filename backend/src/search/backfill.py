@@ -18,6 +18,7 @@ async def backfill_index(repo: SessionRepository) -> int:
             await index_session(
                 session_id=s.id,
                 full_text=text,
+                summary=s.summary,
                 language=s.language,
                 mode=s.mode,
                 duration_s=s.duration_s,

@@ -24,7 +24,8 @@ async def init_vector_store(
 ) -> bool:
     """Initialize ChromaDB PersistentClient next to the SQLite DB.
 
-    Returns True if existing collection was deleted (model change) and re-indexing is needed.
+    Returns True if existing collection was deleted (model or strategy change)
+    and re-indexing is needed.
     """
     global _client, _collection, _embedding_fn
     chroma_dir = str(Path(db_path).parent / "chroma")
@@ -39,8 +40,9 @@ async def init_vector_store(
         None, lambda: chromadb.PersistentClient(path=chroma_dir)
     )
 
-    # Check if existing collection uses a different embedding model
+    # Check if existing collection uses a different embedding model or indexing strategy
     needs_reindex = False
+    current_strategy = "summary_preferred"
     existing_names = await loop.run_in_executor(
         None, lambda: [c.name for c in _client.list_collections()]
     )
@@ -49,6 +51,7 @@ async def init_vector_store(
             None, lambda: _client.get_collection("sessions")
         )
         stored_model = (existing.metadata or {}).get("embedding_model", "")
+        stored_strategy = (existing.metadata or {}).get("index_strategy", "full_text")
         if stored_model != embedding_model:
             logger.warning(
                 "Embedding model changed (%r -> %r). "
@@ -59,16 +62,30 @@ async def init_vector_store(
                 None, lambda: _client.delete_collection("sessions")
             )
             needs_reindex = True
+        elif stored_strategy != current_strategy:
+            logger.warning(
+                "Index strategy changed (%r -> %r). "
+                "Deleting ChromaDB collection for re-indexing.",
+                stored_strategy, current_strategy,
+            )
+            await loop.run_in_executor(
+                None, lambda: _client.delete_collection("sessions")
+            )
+            needs_reindex = True
 
     _collection = await loop.run_in_executor(
         None,
         lambda: _client.get_or_create_collection(
             name="sessions",
-            metadata={"hnsw:space": "cosine", "embedding_model": embedding_model},
+            metadata={
+                "hnsw:space": "cosine",
+                "embedding_model": embedding_model,
+                "index_strategy": current_strategy,
+            },
             embedding_function=_embedding_fn,
         ),
     )
-    logger.info("ChromaDB initialized at %s with model %s", chroma_dir, embedding_model)
+    logger.info("ChromaDB initialized at %s with model %s (strategy=%s)", chroma_dir, embedding_model, current_strategy)
     return needs_reindex
 
 
@@ -93,9 +110,15 @@ async def index_session(
     mode: str,
     duration_s: float | None,
     started_at: str,
+    summary: str | None = None,
 ) -> None:
-    """Index or update a session's text in ChromaDB."""
-    if not full_text.strip():
+    """Index or update a session's text in ChromaDB.
+
+    When a summary is available, it is indexed instead of the full text
+    because concise summaries produce more topic-focused embeddings.
+    """
+    document = summary if summary and summary.strip() else full_text
+    if not document.strip():
         return
 
     collection = get_collection()
@@ -104,7 +127,7 @@ async def index_session(
         None,
         lambda: collection.upsert(
             ids=[str(session_id)],
-            documents=[full_text],
+            documents=[document],
             metadatas=[{
                 "session_id": session_id,
                 "language": language,
@@ -114,7 +137,7 @@ async def index_session(
             }],
         ),
     )
-    logger.debug(f"Indexed session {session_id} in ChromaDB")
+    logger.debug(f"Indexed session {session_id} in ChromaDB (source={'summary' if summary and summary.strip() else 'full_text'})")
 
 
 async def delete_session_embedding(session_id: int) -> None:
@@ -134,14 +157,20 @@ async def search_sessions(
     query: str,
     n_results: int = 50,
     where: dict | None = None,
-) -> list[int]:
-    """Semantic search. Returns ordered list of session_ids by relevance."""
+    distance_threshold: float | None = None,
+) -> list[tuple[int, float]]:
+    """Semantic search. Returns ordered list of (session_id, distance) by relevance.
+
+    Distance is cosine distance: 0.0 = identical, 2.0 = opposite.
+    Results with distance > distance_threshold are filtered out.
+    """
     collection = get_collection()
     loop = asyncio.get_event_loop()
 
     kwargs: dict = {
         "query_texts": [query],
         "n_results": min(n_results, collection.count() or 1),
+        "include": ["distances"],
     }
     if where:
         kwargs["where"] = where
@@ -151,4 +180,15 @@ async def search_sessions(
         lambda: collection.query(**kwargs),
     )
 
-    return [int(sid) for sid in (results["ids"][0] if results["ids"] else [])]
+    ids = results["ids"][0] if results["ids"] else []
+    distances = results["distances"][0] if results["distances"] else []
+
+    pairs = list(zip(
+        [int(sid) for sid in ids],
+        [float(d) for d in distances],
+    ))
+
+    if distance_threshold is not None:
+        pairs = [(sid, d) for sid, d in pairs if d <= distance_threshold]
+
+    return pairs

@@ -325,6 +325,27 @@ export function SessionListPage() {
                         {s.preview}
                       </p>
                     ) : null}
+                    {/* Relevance indicator (only during search) */}
+                    {s.relevance != null && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              s.relevance >= 0.7
+                                ? "bg-emerald-500"
+                                : s.relevance >= 0.4
+                                  ? "bg-amber-500"
+                                  : "bg-red-400",
+                            )}
+                            style={{ width: `${Math.round(s.relevance * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">
+                          {Math.round(s.relevance * 100)}%
+                        </span>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
