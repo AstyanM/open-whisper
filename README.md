@@ -342,25 +342,6 @@ Semantic search is powered by **ChromaDB** with multilingual embeddings (stored 
 
 ---
 
-## Roadmap
-
-- [x] **Phase 1** — Foundations (Tauri + React + FastAPI scaffold, audio capture)
-- [x] **Phase 2** — Transcription mode (WebSocket streaming, React UI, SQLite storage)
-- [x] **Phase 3** — Dictation + overlay (text injection, overlay window, system tray)
-- [x] **Phase 4.1** — Robustness & tests (error handling, backend test suite)
-- [x] **Phase 4.2** — Settings page (REST config API, audio device picker, hot-reload)
-- [x] **Phase 4.3** — Session UX + search (ChromaDB, semantic search, filters, toasts)
-- [x] **Phase 4.4** — UI redesign (warm stone + amber palette, dark/light theme, new logo)
-- [x] **Phase 4.4b** — Switch from vLLM/Voxtral to faster-whisper (no external server needed)
-- [x] **Phase 4.5** — LLM post-processing (summarize, to-do list, reformulate via OpenAI-compatible API)
-- [x] **Phase 4.6** — File transcription (audio file upload, drag-and-drop, streaming progress)
-- [x] **Phase 4.6b** — Search improvements (multilingual ONNX embeddings, search state persisted in URL)
-- [x] **Phase 4.6c** — Search quality (summary-first indexing, distance threshold, exact match ranking, relevance scores)
-- [x] **Phase 4.7** — Packaging & release (setup script, default config, graceful fallback)
-- [ ] **Phase 5** — V2 features (export, speaker diarization, voice commands)
-
----
-
 ## Contributing
 
 Contributions are welcome! Please open an issue first to discuss what you would like to change.
