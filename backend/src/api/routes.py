@@ -1,9 +1,12 @@
 """REST API routes for health check, config, and session management."""
 
 import logging
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 
 from src.audio.capture import AudioCapture
 from src.config import AppConfig, find_config_path
@@ -244,6 +247,7 @@ def _session_to_dict(s, preview: str | None = None) -> dict:
         "duration_s": s.duration_s,
         "summary": s.summary,
         "created_at": s.created_at,
+        "filename": s.filename,
     }
     if preview is not None:
         d["preview"] = preview
@@ -325,6 +329,7 @@ async def get_session(session_id: int):
             "duration_s": session.duration_s,
             "summary": session.summary,
             "created_at": session.created_at,
+            "filename": session.filename,
         },
         "segments": [
             {
@@ -412,6 +417,58 @@ async def process_text_endpoint(request: Request):
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
     return {"scenario": scenario, "result": result}
+
+
+# --- File upload transcription ---
+
+ACCEPTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".webm", ".wma", ".aac", ".opus"}
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
+
+
+@router.post("/api/transcribe/file")
+async def upload_file_for_transcription(
+    file: UploadFile = File(...),
+    language: str = Form("fr"),
+):
+    """Upload an audio file for transcription.
+
+    Returns session_id immediately. Connect to /ws/transcribe-file/{session_id}
+    for real-time transcription progress.
+    """
+    filename = file.filename or "unknown"
+    ext = Path(filename).suffix.lower()
+    if ext not in ACCEPTED_AUDIO_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format: {ext}. Accepted: {', '.join(sorted(ACCEPTED_AUDIO_EXTENSIONS))}",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 500 MB)")
+
+    # Save to temp directory
+    temp_dir = Path(tempfile.gettempdir()) / "openwhisper_uploads"
+    temp_dir.mkdir(exist_ok=True)
+    temp_path = temp_dir / f"{int(datetime.now().timestamp())}_{filename}"
+    temp_path.write_bytes(content)
+
+    # Create DB session
+    repo = _get_repo()
+    started_at = datetime.now(timezone.utc)
+    session_id = await repo.create_session(
+        mode="file",
+        language=language,
+        started_at=started_at,
+        filename=filename,
+    )
+
+    # Register for the WebSocket handler to pick up
+    from src.api._file_transcription_state import register_pending_transcription
+    register_pending_transcription(session_id, temp_path, language, started_at, filename)
+
+    logger.info(f"File uploaded for transcription: {filename} -> session {session_id}")
+    return {"session_id": session_id, "status": "pending"}
 
 
 @router.delete("/api/sessions/{session_id}")

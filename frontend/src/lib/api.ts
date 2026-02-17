@@ -10,6 +10,7 @@ export interface SessionSummary {
   summary?: string | null;
   created_at: string;
   preview?: string;
+  filename?: string | null;
 }
 
 export interface Segment {
@@ -271,6 +272,27 @@ export async function processText(
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Processing failed" }));
     throw new Error(err.detail ?? "Processing failed");
+  }
+  return res.json();
+}
+
+// ── File Upload ─────────────────────────────────────────────────
+
+export async function uploadFileForTranscription(
+  file: File,
+  language: string,
+): Promise<{ session_id: number; status: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("language", language);
+
+  const res = await fetch(`${BACKEND_URL}/api/transcribe/file`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Upload failed" }));
+    throw new Error(err.detail ?? "Upload failed");
   }
   return res.json();
 }

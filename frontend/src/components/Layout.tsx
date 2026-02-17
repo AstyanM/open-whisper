@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Mic, History, Settings } from "lucide-react";
+import { Mic, FileAudio, History, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -9,6 +9,7 @@ import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/comp
 
 const navItems = [
   { to: "/", label: "Transcription", icon: Mic, description: "Live transcription" },
+  { to: "/upload", label: "File Upload", icon: FileAudio, description: "Transcribe audio files" },
   { to: "/sessions", label: "Sessions", icon: History, description: "Session history" },
   { to: "/settings", label: "Settings", icon: Settings, description: "App settings" },
 ];

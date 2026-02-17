@@ -21,6 +21,7 @@ class SessionRow:
     duration_s: float | None
     summary: str | None
     created_at: str
+    filename: str | None = None
 
 
 @dataclass
@@ -41,13 +42,13 @@ class SessionRepository:
         self.db = db
 
     async def create_session(
-        self, mode: str, language: str, started_at: datetime
+        self, mode: str, language: str, started_at: datetime, filename: str | None = None
     ) -> int:
         """Create a new session. Returns the session id."""
         try:
             cursor = await self.db.execute(
-                "INSERT INTO sessions (mode, language, started_at) VALUES (?, ?, ?)",
-                (mode, language, started_at.isoformat()),
+                "INSERT INTO sessions (mode, language, started_at, filename) VALUES (?, ?, ?, ?)",
+                (mode, language, started_at.isoformat(), filename),
             )
             await self.db.commit()
             return cursor.lastrowid

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, FileText, RefreshCw, Search, Sparkles } from "lucide-react";
+import { AlertCircle, FileAudio, FileText, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -213,7 +213,9 @@ export function SessionListPage() {
                     "hover:shadow-md hover:-translate-y-0.5",
                     s.mode === "transcription"
                       ? "border-l-4 border-l-amber-500"
-                      : "border-l-4 border-l-emerald-500",
+                      : s.mode === "file"
+                        ? "border-l-4 border-l-sky-500"
+                        : "border-l-4 border-l-emerald-500",
                     isDeleting
                       ? "translate-x-full opacity-0"
                       : "translate-x-0 opacity-100",
@@ -230,10 +232,16 @@ export function SessionListPage() {
                           variant={
                             s.mode === "transcription"
                               ? "transcription"
-                              : "dictation"
+                              : s.mode === "file"
+                                ? "file"
+                                : "dictation"
                           }
                         >
-                          {s.mode}
+                          {s.mode === "file" ? (
+                            <><FileAudio className="mr-1 h-3 w-3" />file</>
+                          ) : (
+                            s.mode
+                          )}
                         </Badge>
                         <span className="text-sm text-muted-foreground">
                           {formatDuration(s.duration_s)}
@@ -249,6 +257,11 @@ export function SessionListPage() {
                           {formatDate(s.started_at)}
                         </TooltipContent>
                       </Tooltip>
+                      {s.filename && (
+                        <span className="truncate text-xs text-muted-foreground/60">
+                          {s.filename}
+                        </span>
+                      )}
                       {s.summary ? (
                         <p className="truncate text-xs text-amber-600/70 dark:text-amber-400/70 flex items-center gap-1">
                           <Sparkles className="h-3 w-3 shrink-0" />

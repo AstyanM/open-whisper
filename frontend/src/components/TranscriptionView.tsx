@@ -1,17 +1,21 @@
 import { useEffect, useRef } from "react";
-import { Loader2, Mic } from "lucide-react";
+import { Check, FileAudio, Loader2, Mic, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { formatDurationMs } from "@/lib/format";
 import type { TranscriptionState } from "@/hooks/useTranscription";
+import type { FileTranscriptionState } from "@/hooks/useFileTranscription";
+
+type ViewState = TranscriptionState | FileTranscriptionState;
 
 interface TranscriptionViewProps {
   text: string;
-  state: TranscriptionState;
+  state: ViewState;
   elapsedMs: number;
   modelLabel?: string | null;
+  progress?: number; // 0-100, for file transcription
 }
 
 export function TranscriptionView({
@@ -19,6 +23,7 @@ export function TranscriptionView({
   state,
   elapsedMs,
   modelLabel,
+  progress,
 }: TranscriptionViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -32,16 +37,25 @@ export function TranscriptionView({
   const isFinalizing = state === "finalizing";
   const isConnecting = state === "connecting";
   const isLoadingModel = state === "loading_model";
-  const isActive = isRecording || isFinalizing;
+  const isUploading = state === "uploading";
+  const isTranscribing = state === "transcribing";
+  const isCompleted = state === "completed";
+
+  const isLiveActive = isRecording || isFinalizing;
+  const isFileActive = isTranscribing || isUploading;
   const isLoading = isConnecting || isLoadingModel;
   const showDuration = elapsedMs > 0;
+  const isFileMode = isUploading || isTranscribing || isCompleted;
 
   return (
     <Card
       className={cn(
         "!py-0 !gap-0",
-        isActive && "ring-2 ring-amber-500/20 glow-amber",
-        isLoading && "ring-2 ring-amber-500/10",
+        isLiveActive && "ring-2 ring-amber-500/20 glow-amber",
+        isFileActive && "ring-2 ring-sky-500/20",
+        isLoading && !isFileMode && "ring-2 ring-amber-500/10",
+        isLoading && isFileMode && "ring-2 ring-sky-500/10",
+        isFinalizing && isFileMode && "ring-2 ring-sky-500/10",
       )}
     >
       <CardContent className="p-0">
@@ -49,10 +63,17 @@ export function TranscriptionView({
           ref={scrollRef}
           className="h-[400px] overflow-y-auto px-4 pt-1.5 pb-3"
         >
-          {(modelLabel || showDuration) && (
-            <div className="mb-3 flex items-center justify-between">
+          {(modelLabel || showDuration || (isTranscribing && progress != null && progress > 0)) && (
+            <div className="mb-3 flex items-center justify-between gap-3">
               {modelLabel ? (
                 <span className="font-mono text-xs text-muted-foreground/50">{modelLabel}</span>
+              ) : isTranscribing && progress != null ? (
+                <div className="flex-1 flex items-center gap-2">
+                  <Progress value={progress} className="h-1.5 flex-1" />
+                  <span className="font-mono text-xs text-muted-foreground/50 shrink-0">
+                    {Math.round(progress)}%
+                  </span>
+                </div>
               ) : <span />}
               {showDuration && (
                 <Badge variant="secondary">{formatDurationMs(elapsedMs)}</Badge>
@@ -62,26 +83,57 @@ export function TranscriptionView({
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
             {text || (
               <>
-                {isLoading ? (
+                {isUploading ? (
+                  /* Uploading file */
+                  <div className="flex flex-col items-center justify-center gap-4 pt-28">
+                    <div className="rounded-full bg-sky-500/10 p-4">
+                      <Upload className="h-8 w-8 text-sky-500 animate-pulse" />
+                    </div>
+                    <span className="text-muted-foreground">Uploading file...</span>
+                    <Progress className="w-48" />
+                  </div>
+                ) : isLoading ? (
                   /* Model loading state */
                   <div className="flex flex-col items-center justify-center gap-4 pt-28">
-                    <div className="rounded-full bg-amber-500/10 p-4">
-                      <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+                    <div className={cn("rounded-full p-4", isFileMode ? "bg-sky-500/10" : "bg-amber-500/10")}>
+                      <Loader2 className={cn("h-8 w-8 animate-spin", isFileMode ? "text-sky-500" : "text-amber-500")} />
                     </div>
                     <span className="text-muted-foreground">
                       {isLoadingModel ? "Loading Whisper model..." : "Connecting..."}
                     </span>
                     <Progress className="w-48" />
                   </div>
+                ) : isTranscribing ? (
+                  /* File transcription in progress, no text yet */
+                  <div className="flex flex-col items-center justify-center gap-4 pt-28">
+                    <div className="rounded-full bg-sky-500/10 p-4">
+                      <FileAudio className="h-8 w-8 text-sky-500 animate-pulse" />
+                    </div>
+                    <span className="text-muted-foreground">Transcribing...</span>
+                    {progress != null && (
+                      <div className="flex items-center gap-2 w-48">
+                        <Progress value={progress} className="h-2 flex-1" />
+                        <span className="text-xs text-muted-foreground">{Math.round(progress)}%</span>
+                      </div>
+                    )}
+                  </div>
                 ) : isFinalizing ? (
                   /* Finalizing state */
                   <div className="flex flex-col items-center justify-center gap-4 pt-28">
-                    <div className="rounded-full bg-amber-500/10 p-4">
-                      <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
+                    <div className={cn("rounded-full p-4", isFileMode ? "bg-sky-500/10" : "bg-amber-500/10")}>
+                      <Loader2 className={cn("h-8 w-8 animate-spin", isFileMode ? "text-sky-500" : "text-amber-500")} />
                     </div>
                     <span className="text-muted-foreground">
                       Finalizing transcription...
                     </span>
+                  </div>
+                ) : isCompleted ? (
+                  /* Completed (no text — unusual but possible) */
+                  <div className="flex flex-col items-center justify-center gap-3 pt-28">
+                    <div className="rounded-full bg-sky-500/10 p-4">
+                      <Check className="h-8 w-8 text-sky-500" />
+                    </div>
+                    <span className="text-muted-foreground">Transcription complete</span>
                   </div>
                 ) : isRecording ? (
                   /* Recording but no text yet */

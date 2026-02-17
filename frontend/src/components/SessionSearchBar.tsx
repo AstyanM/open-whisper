@@ -133,6 +133,7 @@ export function SessionSearchBar({ onFiltersChange }: SessionSearchBarProps) {
                 <SelectItem value="all">All modes</SelectItem>
                 <SelectItem value="transcription">Transcription</SelectItem>
                 <SelectItem value="dictation">Dictation</SelectItem>
+                <SelectItem value="file">File Upload</SelectItem>
               </SelectContent>
             </Select>
 

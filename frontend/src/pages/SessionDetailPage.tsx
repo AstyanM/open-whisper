@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ChevronRight, Copy, Check, RefreshCw, Sparkles, Loader2 } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, Check, FileAudio, RefreshCw, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -193,10 +193,18 @@ export function SessionDetailPage() {
         <Badge variant="secondary">{languageLabel(session.language)}</Badge>
         <Badge
           variant={
-            session.mode === "transcription" ? "transcription" : "dictation"
+            session.mode === "transcription"
+              ? "transcription"
+              : session.mode === "file"
+                ? "file"
+                : "dictation"
           }
         >
-          {session.mode}
+          {session.mode === "file" ? (
+            <><FileAudio className="mr-1 h-3 w-3" />file</>
+          ) : (
+            session.mode
+          )}
         </Badge>
         <span className="text-sm text-muted-foreground">
           {formatDuration(session.duration_s)}
@@ -205,6 +213,15 @@ export function SessionDetailPage() {
         <span className="text-sm text-muted-foreground">
           {formatDateLong(session.started_at)}
         </span>
+        {session.filename && (
+          <>
+            <Separator orientation="vertical" className="h-4" />
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              <FileAudio className="h-3.5 w-3.5" />
+              {session.filename}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Summary */}

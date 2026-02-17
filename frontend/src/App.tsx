@@ -6,6 +6,7 @@ import { TranscriptionPage } from "@/pages/TranscriptionPage";
 import { SessionListPage } from "@/pages/SessionListPage";
 import { SessionDetailPage } from "@/pages/SessionDetailPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { FileUploadPage } from "@/pages/FileUploadPage";
 import { OverlayPage } from "@/pages/OverlayPage";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -24,6 +25,7 @@ function App() {
           }
         >
           <Route path="/" element={<TranscriptionPage />} />
+          <Route path="/upload" element={<FileUploadPage />} />
           <Route path="/sessions" element={<SessionListPage />} />
           <Route path="/sessions/:id" element={<SessionDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />

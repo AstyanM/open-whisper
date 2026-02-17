@@ -50,6 +50,21 @@ async def init_db(db_path: str) -> aiosqlite.Connection:
     except (aiosqlite.Error, OSError) as e:
         raise DatabaseError(f"Failed to initialize database at {path}: {e}") from e
 
+    # --- Migrations ---
+    try:
+        cursor = await db.execute("PRAGMA user_version")
+        row = await cursor.fetchone()
+        version = row[0] if row else 0
+
+        if version < 1:
+            # V1: Add filename column for file upload sessions
+            await db.execute("ALTER TABLE sessions ADD COLUMN filename TEXT")
+            await db.execute("PRAGMA user_version = 1")
+            await db.commit()
+            logger.info("Migration V1 applied: added filename column")
+    except aiosqlite.Error as e:
+        logger.warning(f"Migration check/apply failed: {e}")
+
     logger.info(f"Database initialized at {path.resolve()}")
     return db
 

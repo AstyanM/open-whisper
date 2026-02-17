@@ -373,6 +373,212 @@ async def _auto_summarize(session_id: int, text: str, repo: SessionRepository) -
         logger.warning(f"Auto-summary failed for session {session_id}: {e}")
 
 
+@ws_router.websocket("/ws/transcribe-file/{session_id}")
+async def websocket_transcribe_file(websocket: WebSocket, session_id: int):
+    """WebSocket endpoint for file transcription progress.
+
+    Protocol:
+    1. Client connects after POST /api/transcribe/file returns session_id
+    2. Server starts transcription from the uploaded file
+    3. Server streams: status, transcript_delta (with timestamps), progress, session_ended
+    4. Client can send {"type": "cancel"} to abort
+    """
+    await websocket.accept()
+    _debug(f"[FILE-WS] Client connected for session {session_id}")
+    logger.info("File transcription WS client connected for session %d", session_id)
+
+    from src.api._file_transcription_state import (
+        get_pending_transcription,
+        remove_pending_transcription,
+    )
+
+    pending = get_pending_transcription(session_id)
+    if not pending:
+        await _send_ws_error(websocket, "No pending transcription for this session", "not_found")
+        await websocket.close()
+        return
+
+    try:
+        await _handle_file_transcription(websocket, pending)
+    except WebSocketDisconnect:
+        _debug(f"[FILE-WS] Client disconnected during file transcription {session_id}")
+        logger.info("File transcription WS client disconnected (session %d)", session_id)
+    except Exception as e:
+        _debug(f"[FILE-WS] Error for session {session_id}: {e}")
+        logger.error("File transcription error for session %d: %s", session_id, e, exc_info=True)
+        await _send_ws_error(websocket, str(e))
+    finally:
+        # Clean up temp file
+        try:
+            pending.file_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        remove_pending_transcription(session_id)
+
+
+async def _handle_file_transcription(websocket: WebSocket, pending):
+    """Orchestrate file transcription with progress streaming."""
+    from src.main import config
+    from src.transcription.file_transcriber import transcribe_file_streaming
+
+    session_id = pending.session_id
+    language = pending.language
+    started_at = pending.started_at
+    filename = pending.filename
+
+    # Get DB repo
+    try:
+        db = get_db()
+    except RuntimeError:
+        await _send_ws_error(websocket, "Database not available", "database_error")
+        return
+    repo = SessionRepository(db)
+
+    # Send loading_model status
+    await _send_ws_json(websocket, {"type": "status", "state": "loading_model"})
+
+    # Set up cancel listener
+    cancel_event = asyncio.Event()
+
+    async def listen_for_cancel():
+        try:
+            while not cancel_event.is_set():
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+                if msg.get("type") == "cancel":
+                    _debug(f"[FILE-WS] Cancel received for session {session_id}")
+                    cancel_event.set()
+                    return
+        except WebSocketDisconnect:
+            cancel_event.set()
+
+    cancel_task = asyncio.create_task(listen_for_cancel())
+
+    full_text = ""
+    segment_count = 0
+    session_start_time = time.monotonic()
+    audio_duration_s = 0.0
+
+    try:
+        audio_duration_s, segments = await transcribe_file_streaming(
+            file_path=pending.file_path,
+            config=config.models.transcription,
+            language=language,
+        )
+
+        # Send transcribing status + file info
+        await _send_ws_json(websocket, {"type": "status", "state": "transcribing"})
+        await _send_ws_json(websocket, {
+            "type": "file_info",
+            "audio_duration_s": round(audio_duration_s, 2),
+            "filename": filename,
+        })
+
+        async for seg in segments:
+            if cancel_event.is_set():
+                _debug(f"[FILE-WS] Cancelled at segment {segment_count}")
+                break
+
+            full_text += (" " if full_text else "") + seg.text
+            segment_count += 1
+
+            # Calculate progress
+            progress = min(100.0, (seg.end_ms / 1000.0 / audio_duration_s) * 100) if audio_duration_s > 0 else 0
+            elapsed_ms = int((time.monotonic() - session_start_time) * 1000)
+
+            # Send transcript delta (compatible with live transcription format)
+            await _send_ws_json(websocket, {
+                "type": "transcript_delta",
+                "delta": (" " if segment_count > 1 else "") + seg.text,
+                "elapsed_ms": elapsed_ms,
+                "start_ms": seg.start_ms,
+                "end_ms": seg.end_ms,
+            })
+
+            # Send progress
+            await _send_ws_json(websocket, {
+                "type": "progress",
+                "percent": round(progress, 1),
+            })
+
+            # Save segment to DB with real timestamps
+            await repo.add_segment(
+                session_id=session_id,
+                text=seg.text,
+                start_ms=seg.start_ms,
+                end_ms=seg.end_ms,
+                confidence=seg.confidence,
+            )
+
+    except WhisperModelError as e:
+        _debug(f"[FILE-WS] Model error for session {session_id}: {e}")
+        await _send_ws_error(websocket, str(e), e.code)
+        return
+    except Exception as e:
+        _debug(f"[FILE-WS] Transcription failed for session {session_id}: {e}")
+        logger.error("File transcription failed for session %d: %s", session_id, e, exc_info=True)
+        await _send_ws_error(websocket, f"Transcription failed: {e}")
+        return
+    finally:
+        cancel_task.cancel()
+
+    # Finalization
+    await _send_ws_json(websocket, {"type": "status", "state": "finalizing"})
+    _debug(f"[FILE-WS] Finalizing session {session_id}: {segment_count} segments, {len(full_text)} chars")
+
+    try:
+        ended_at = datetime.now(timezone.utc)
+        # Use audio duration (not wall-clock time)
+        duration_s = audio_duration_s if audio_duration_s > 0 else (ended_at - started_at).total_seconds()
+        await repo.end_session(session_id, ended_at, duration_s)
+
+        # Index in ChromaDB
+        if full_text.strip():
+            try:
+                await index_session(
+                    session_id=session_id,
+                    full_text=full_text.strip(),
+                    language=language,
+                    mode="file",
+                    duration_s=round(duration_s, 2),
+                    started_at=started_at.isoformat(),
+                )
+            except Exception as e:
+                logger.warning("Failed to index file session %d: %s", session_id, e)
+
+        await _send_ws_json(websocket, {
+            "type": "session_ended",
+            "session_id": session_id,
+            "duration_s": round(duration_s, 2),
+            "segment_count": segment_count,
+        })
+
+        _debug(f"[FILE-WS] Session {session_id} ended: {duration_s:.1f}s audio, {segment_count} segments")
+        logger.info(
+            "File session %d ended: %.1fs audio, %d segments, %d chars",
+            session_id, duration_s, segment_count, len(full_text),
+        )
+
+        # Auto-summarize in background
+        if full_text.strip() and is_llm_available():
+            try:
+                from src.main import config as app_config
+                if app_config and app_config.models.llm.auto_summarize:
+                    asyncio.create_task(
+                        _auto_summarize(session_id, full_text.strip(), repo)
+                    )
+            except Exception as e:
+                logger.warning("Failed to launch auto-summary for file session %d: %s", session_id, e)
+
+    except DatabaseError as e:
+        _debug(f"[FILE-WS] Failed to finalize session {session_id}: {e}")
+        logger.error("Failed to finalize file session %d: %s", session_id, e)
+        await _send_ws_error(websocket, "Failed to save session", e.code)
+    except Exception as e:
+        _debug(f"[FILE-WS] Failed to finalize session {session_id}: {e}")
+        logger.error("Failed to finalize file session %d: %s", session_id, e, exc_info=True)
+
+
 @ws_router.websocket("/ws/mic-test")
 async def websocket_mic_test(websocket: WebSocket):
     """WebSocket endpoint for microphone testing (volume meter).
