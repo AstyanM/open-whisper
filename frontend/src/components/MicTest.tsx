@@ -100,7 +100,7 @@ export function MicTest({ device }: MicTestProps) {
       </div>
 
       {/* Volume bar */}
-      <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+      <div className="h-3 w-full overflow-hidden rounded-full bg-muted ring-1 ring-border">
         <div
           className={cn(
             "h-full rounded-full transition-all duration-75",

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "tauri": "tauri",
+    "tauri": "cd frontend && npx tauri",
     "backend": "cd backend && uv run python -m src.main",
     "test:backend": "cd backend && uv run python -m pytest tests/ -v"
   }
