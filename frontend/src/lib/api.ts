@@ -168,6 +168,7 @@ export interface BackendConfig {
 
 export interface AppConfig {
   language: string;
+  max_upload_size_mb: number;
   shortcuts: ShortcutsConfig;
   models: ModelsConfig;
   audio: AudioConfig;

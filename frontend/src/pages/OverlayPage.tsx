@@ -146,16 +146,16 @@ export function OverlayPage() {
     };
   }, []);
 
-  // Load initial overlay config from backend — hide window if disabled
+  // Load initial overlay config from backend — show only if enabled
   useEffect(() => {
     fetchFullConfig()
       .then((cfg) => {
         applyConfig(cfg.overlay);
-        if (!cfg.overlay.enabled) {
-          setWindowVisible("overlay", false);
-        }
+        setWindowVisible("overlay", cfg.overlay.enabled);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Backend not ready — window stays hidden (visible:false in tauri.conf)
+      });
   }, []);
 
   useEffect(() => {
@@ -233,7 +233,10 @@ export function OverlayPage() {
     let cleanup: (() => void) | undefined;
     listenEvent<OverlayConfigPayload>(
       "overlay-config-changed",
-      applyConfig,
+      (cfg) => {
+        applyConfig(cfg);
+        setWindowVisible("overlay", cfg.enabled);
+      },
     ).then((unlisten) => {
       cleanup = unlisten;
     });

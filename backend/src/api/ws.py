@@ -348,7 +348,7 @@ async def _handle_transcription_session(
                 from src.main import config as app_config
                 if app_config and app_config.models.llm.auto_summarize:
                     asyncio.create_task(
-                        _auto_summarize(session_id, full_text.strip(), repo)
+                        _auto_summarize(session_id, full_text.strip(), repo, language=language)
                     )
             except Exception as e:
                 logger.warning(f"Failed to launch auto-summary for session {session_id}: {e}")
@@ -362,10 +362,10 @@ async def _handle_transcription_session(
         logger.error(f"Failed to finalize session {session_id}: {e}", exc_info=True)
 
 
-async def _auto_summarize(session_id: int, text: str, repo: SessionRepository) -> None:
+async def _auto_summarize(session_id: int, text: str, repo: SessionRepository, language: str = "en") -> None:
     """Background task: generate and save a summary for a session."""
     try:
-        summary = await summarize_text(text)
+        summary = await summarize_text(text, language=language)
         if summary:
             await repo.update_session_summary(session_id, summary)
             logger.info(f"Auto-summary generated for session {session_id} ({len(summary)} chars)")
@@ -565,7 +565,7 @@ async def _handle_file_transcription(websocket: WebSocket, pending):
                 from src.main import config as app_config
                 if app_config and app_config.models.llm.auto_summarize:
                     asyncio.create_task(
-                        _auto_summarize(session_id, full_text.strip(), repo)
+                        _auto_summarize(session_id, full_text.strip(), repo, language=language)
                     )
             except Exception as e:
                 logger.warning("Failed to launch auto-summary for file session %d: %s", session_id, e)

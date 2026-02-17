@@ -5,6 +5,9 @@
 # Supported: fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko
 language: "fr"
 
+# Maximum file upload size in MB (50-1024)
+max_upload_size_mb: 500
+
 # Global keyboard shortcuts (Tauri)
 shortcuts:
   toggle_dictation: "Ctrl+Shift+D"      # Activate/deactivate dictation mode

@@ -231,29 +231,47 @@ export function SessionDetailPage() {
             <Sparkles className="h-4 w-4 text-amber-500" />
             Summary
           </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleSummarize}
-            disabled={summarizing || !full_text}
-          >
-            {summarizing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-2 h-4 w-4" />
-            )}
-            {session.summary ? "Regenerate" : "Generate"}
-          </Button>
+          {session.summary && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSummarize}
+              disabled={summarizing || !full_text}
+            >
+              {summarizing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Regenerate
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {session.summary ? (
             <p className="text-sm leading-relaxed">{session.summary}</p>
           ) : (
-            <p className="text-sm italic text-muted-foreground">
-              {summarizing
-                ? "Generating summary..."
-                : "No summary yet. Click Generate to create one."}
-            </p>
+            <div className="flex flex-col items-center gap-3 py-4">
+              {summarizing ? (
+                <>
+                  <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+                  <p className="text-sm text-muted-foreground">Generating summary...</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">No summary yet</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSummarize}
+                    disabled={!full_text}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate summary
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

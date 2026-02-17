@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
-import { Check, FileAudio, Loader2, Mic, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, FileAudio, Loader2, Mic, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { formatDurationMs } from "@/lib/format";
@@ -26,12 +28,20 @@ export function TranscriptionView({
   progress,
 }: TranscriptionViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [text]);
+
+  async function handleCopy() {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const isRecording = state === "recording";
   const isFinalizing = state === "finalizing";
@@ -63,7 +73,7 @@ export function TranscriptionView({
           ref={scrollRef}
           className="h-[400px] overflow-y-auto px-4 pt-1.5 pb-3"
         >
-          {(modelLabel || showDuration || (isTranscribing && progress != null && progress > 0)) && (
+          {(modelLabel || showDuration || text || (isTranscribing && progress != null && progress > 0)) && (
             <div className="mb-3 flex items-center justify-between gap-3">
               {modelLabel ? (
                 <span className="font-mono text-xs text-muted-foreground/50">{modelLabel}</span>
@@ -75,9 +85,21 @@ export function TranscriptionView({
                   </span>
                 </div>
               ) : <span />}
-              {showDuration && (
-                <Badge variant="secondary">{formatDurationMs(elapsedMs)}</Badge>
-              )}
+              <div className="flex items-center gap-1.5">
+                {showDuration && (
+                  <Badge variant="secondary">{formatDurationMs(elapsedMs)}</Badge>
+                )}
+                {text && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy}>
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{copied ? "Copied!" : "Copy text"}</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             </div>
           )}
           <div className="whitespace-pre-wrap text-sm leading-relaxed">

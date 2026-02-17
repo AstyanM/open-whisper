@@ -1,28 +1,29 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileAudio, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { TranscriptionView } from "@/components/TranscriptionView";
 import { ScenarioCards } from "@/components/ScenarioCards";
 import { ScenarioResult } from "@/components/ScenarioResult";
 import { useFileTranscription } from "@/hooks/useFileTranscription";
-import { processText, type Scenario } from "@/lib/api";
+import { fetchHealth, fetchFullConfig, processText, type Scenario } from "@/lib/api";
 import { DEFAULT_LANGUAGE } from "@/lib/constants";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const ACCEPTED_EXTENSIONS = ".wav,.mp3,.flac,.ogg,.m4a,.webm,.wma,.aac,.opus";
-const MAX_FILE_SIZE_MB = 500;
+const ACCEPTED_FORMATS_LABEL = "WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus";
 
 export function FileUploadPage() {
   const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [modelLabel, setModelLabel] = useState<string | null>(null);
+  const [maxSizeMb, setMaxSizeMb] = useState(500);
 
   const ft = useFileTranscription();
 
@@ -30,6 +31,25 @@ export function FileUploadPage() {
     ft.state !== "idle" && ft.state !== "completed" && ft.state !== "error";
   const hasText = ft.liveText.length > 0;
   const isDone = ft.state === "completed";
+
+  // Fetch model info + config once
+  useEffect(() => {
+    fetchHealth()
+      .then((data) => {
+        const t = data.checks?.transcription;
+        if (t?.engine && t?.model) {
+          const parts = [t.engine, t.model];
+          if (t.device) parts.push(t.device);
+          setModelLabel(parts.join(" · "));
+        }
+      })
+      .catch(() => {});
+    fetchFullConfig()
+      .then((cfg) => {
+        if (cfg.max_upload_size_mb) setMaxSizeMb(cfg.max_upload_size_mb);
+      })
+      .catch(() => {});
+  }, []);
 
   // LLM scenario processing (same pattern as TranscriptionPage)
   const [loadingScenario, setLoadingScenario] = useState<Scenario | null>(null);
@@ -56,8 +76,8 @@ export function FileUploadPage() {
   );
 
   function handleFileSelect(file: File) {
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      toast.error(`File too large (max ${MAX_FILE_SIZE_MB} MB)`);
+    if (file.size > maxSizeMb * 1024 * 1024) {
+      toast.error(`File too large (max ${maxSizeMb} MB)`);
       return;
     }
     setSelectedFile(file);
@@ -87,83 +107,91 @@ export function FileUploadPage() {
       {/* File drop zone (shown when idle) */}
       {ft.state === "idle" && (
         <>
-          <Card>
-            <CardContent
-              className={cn(
-                "flex flex-col items-center justify-center gap-4 py-12 border-2 border-dashed rounded-lg transition-colors cursor-pointer",
-                dragOver
-                  ? "border-sky-500 bg-sky-500/5"
-                  : selectedFile
-                    ? "border-sky-500/50 bg-sky-500/5"
-                    : "border-border hover:border-sky-500/50",
-              )}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileSelect(file);
-                }}
-              />
-
-              {selectedFile ? (
-                <>
-                  <div className="rounded-full bg-sky-500/10 p-4">
-                    <FileAudio className="h-8 w-8 text-sky-500" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-medium">{selectedFile.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedFile(null);
-                    }}
-                  >
-                    <X className="mr-1 h-4 w-4" /> Remove
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="rounded-full bg-sky-500/10 p-4">
-                    <Upload className="h-8 w-8 text-sky-500/60" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-muted-foreground">
-                      Drop an audio file here or click to browse
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground/60">
-                      WAV, MP3, FLAC, OGG, M4A, WebM (max {MAX_FILE_SIZE_MB}{" "}
-                      MB)
-                    </p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Controls: Language selector + Upload button */}
+          {/* Controls bar: Language + model info + Upload button (ABOVE drop zone) */}
           <div className="flex items-center justify-between rounded-lg bg-secondary/30 px-4 py-3">
-            <LanguageSelector value={language} onChange={setLanguage} />
+            <div className="flex items-center gap-3">
+              <LanguageSelector value={language} onChange={setLanguage} />
+              {modelLabel && (
+                <span className="font-mono text-xs text-muted-foreground/50">
+                  {modelLabel}
+                </span>
+              )}
+            </div>
             <Button onClick={handleUpload} disabled={!selectedFile}>
               <Upload className="mr-2 h-4 w-4" />
               Transcribe
             </Button>
+          </div>
+
+          {/* Drop zone */}
+          <div
+            className={cn(
+              "flex flex-col items-center justify-center gap-4 py-12 border-2 border-dashed rounded-lg transition-colors cursor-pointer",
+              dragOver
+                ? "border-sky-500 bg-sky-500/5"
+                : selectedFile
+                  ? "border-sky-500/50 bg-sky-500/5"
+                  : "border-border hover:border-sky-500/50",
+            )}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_EXTENSIONS}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileSelect(file);
+              }}
+            />
+
+            {selectedFile ? (
+              <>
+                <div className="rounded-full bg-sky-500/10 p-4">
+                  <FileAudio className="h-8 w-8 text-sky-500" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">{selectedFile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(null);
+                  }}
+                >
+                  <X className="mr-1 h-4 w-4" /> Remove
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="rounded-full bg-sky-500/10 p-4">
+                  <Upload className="h-8 w-8 text-sky-500/60" />
+                </div>
+                <div className="text-center">
+                  <p className="text-muted-foreground">
+                    Drop an audio file here or click to browse
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/60">
+                    {ACCEPTED_FORMATS_LABEL}
+                  </p>
+                  <p className="text-xs text-muted-foreground/40">
+                    Max {maxSizeMb} MB
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

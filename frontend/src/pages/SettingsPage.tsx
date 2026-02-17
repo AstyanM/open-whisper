@@ -155,6 +155,31 @@ export function SettingsPage() {
             />
           </div>
 
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Max upload size</Label>
+                <p className="text-xs text-muted-foreground">
+                  Maximum file size for audio upload
+                </p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {draft.max_upload_size_mb >= 1024
+                  ? "1 GB"
+                  : `${draft.max_upload_size_mb} MB`}
+              </span>
+            </div>
+            <Slider
+              min={50}
+              max={1024}
+              step={50}
+              value={[draft.max_upload_size_mb]}
+              onValueChange={([v]) =>
+                updateDraft((p) => ({ ...p, max_upload_size_mb: v }))
+              }
+            />
+          </div>
+
           <div className="flex items-center justify-between">
             <Label className="text-muted-foreground">Toggle dictation</Label>
             <span className="rounded bg-muted px-2 py-1 text-xs font-mono">

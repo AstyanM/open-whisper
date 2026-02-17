@@ -25,6 +25,7 @@
         "url": "/overlay",
         "width": 160,
         "height": 56,
+        "visible": false,
         "resizable": false,
         "decorations": false,
         "transparent": true,

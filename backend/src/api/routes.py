@@ -361,7 +361,7 @@ async def summarize_session(session_id: int):
         raise HTTPException(status_code=400, detail="Session has no text to summarize")
 
     try:
-        summary = await summarize_text(full_text)
+        summary = await summarize_text(full_text, language=session.language)
     except Exception as e:
         logger.error(f"LLM summarization failed for session {session_id}: {e}")
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
@@ -422,7 +422,6 @@ async def process_text_endpoint(request: Request):
 # --- File upload transcription ---
 
 ACCEPTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".webm", ".wma", ".aac", ".opus"}
-MAX_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
 
 
 @router.post("/api/transcribe/file")
@@ -435,6 +434,10 @@ async def upload_file_for_transcription(
     Returns session_id immediately. Connect to /ws/transcribe-file/{session_id}
     for real-time transcription progress.
     """
+    from src.main import config as app_config
+    max_size_mb = app_config.max_upload_size_mb if app_config else 500
+    max_size = max_size_mb * 1024 * 1024
+
     filename = file.filename or "unknown"
     ext = Path(filename).suffix.lower()
     if ext not in ACCEPTED_AUDIO_EXTENSIONS:
@@ -444,8 +447,8 @@ async def upload_file_for_transcription(
         )
 
     content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="File too large (max 500 MB)")
+    if len(content) > max_size:
+        raise HTTPException(status_code=413, detail=f"File too large (max {max_size_mb} MB)")
 
     # Save to temp directory
     temp_dir = Path(tempfile.gettempdir()) / "openwhisper_uploads"

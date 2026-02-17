@@ -154,6 +154,12 @@ class BackendConfig(BaseModel):
 
 class AppConfig(BaseModel):
     language: str = Field(default="fr", description="Default transcription language")
+    max_upload_size_mb: int = Field(
+        default=500,
+        ge=50,
+        le=1024,
+        description="Maximum file upload size in MB (50-1024)",
+    )
     shortcuts: ShortcutsConfig = ShortcutsConfig()
     models: ModelsConfig = ModelsConfig()
     audio: AudioConfig = AudioConfig()

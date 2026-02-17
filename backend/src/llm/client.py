@@ -23,9 +23,9 @@ _config: LLMConfig | None = None
 
 SUMMARIZE_SYSTEM = (
     "You are a concise summarizer. Given a voice transcription, produce a clear "
-    "summary in 2-4 sentences. Preserve the original language of the transcription. "
-    "Focus on the key topics and main points discussed. Do not add information "
-    "that is not in the original text."
+    "summary in 1-2 sentences maximum. Focus on the key topics discussed. "
+    "Do not add information that is not in the original text. "
+    "You MUST respond in {language}."
 )
 
 SUMMARIZE_USER = "Summarize the following transcription:\n\n{text}"
@@ -133,12 +133,13 @@ async def _chat_completion(system_prompt: str, user_prompt: str) -> str:
         raise LLMError(f"LLM request failed: {e}") from e
 
 
-async def summarize_text(text: str) -> str:
+async def summarize_text(text: str, language: str = "en") -> str:
     """Generate a summary of the given transcription text."""
     if not text.strip():
         return ""
+    lang_name = _LANGUAGE_NAMES.get(language, language)
     return await _chat_completion(
-        SUMMARIZE_SYSTEM,
+        SUMMARIZE_SYSTEM.format(language=lang_name),
         SUMMARIZE_USER.format(text=text),
     )
 
