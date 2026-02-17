@@ -14,6 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DatePicker } from "@/components/ui/date-picker";
 import { LANGUAGES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { SearchFilters } from "@/lib/api";
@@ -43,15 +44,18 @@ export function SessionSearchBar({ onFiltersChange, initialFilters }: SessionSea
   );
   const [showFilters, setShowFilters] = useState(hasInitialAdvanced);
   const isFirstRender = useRef(true);
+  const onFiltersChangeRef = useRef(onFiltersChange);
+  onFiltersChangeRef.current = onFiltersChange;
 
   // Debounced emission — skip initial mount (parent already has the filters from URL)
+  // Uses a ref for the callback to avoid re-firing when the parent re-renders
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
     const timer = setTimeout(() => {
-      onFiltersChange({
+      onFiltersChangeRef.current({
         q: query || undefined,
         language: language || undefined,
         mode: mode || undefined,
@@ -62,7 +66,7 @@ export function SessionSearchBar({ onFiltersChange, initialFilters }: SessionSea
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, language, mode, durationMin, durationMax, dateFrom, dateTo, onFiltersChange]);
+  }, [query, language, mode, durationMin, durationMax, dateFrom, dateTo]);
 
   const hasFilters =
     query || language || mode || durationMin || durationMax || dateFrom || dateTo;
@@ -156,8 +160,8 @@ export function SessionSearchBar({ onFiltersChange, initialFilters }: SessionSea
             <div className="flex items-center gap-1">
               <Input
                 type="number"
-                placeholder="Min (min)"
-                className="w-[100px]"
+                placeholder="Min"
+                className="w-[72px]"
                 min={0}
                 value={durationMin}
                 onChange={(e) => setDurationMin(e.target.value)}
@@ -165,27 +169,28 @@ export function SessionSearchBar({ onFiltersChange, initialFilters }: SessionSea
               <span className="text-xs text-muted-foreground">-</span>
               <Input
                 type="number"
-                placeholder="Max (min)"
-                className="w-[100px]"
+                placeholder="Max"
+                className="w-[72px]"
                 min={0}
                 value={durationMax}
                 onChange={(e) => setDurationMax(e.target.value)}
               />
+              <span className="text-xs text-muted-foreground">min</span>
             </div>
 
             <div className="flex items-center gap-1">
-              <Input
-                type="date"
-                className="w-[140px]"
+              <DatePicker
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={setDateFrom}
+                placeholder="From"
+                className="w-[140px]"
               />
               <span className="text-xs text-muted-foreground">-</span>
-              <Input
-                type="date"
-                className="w-[140px]"
+              <DatePicker
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={setDateTo}
+                placeholder="To"
+                className="w-[140px]"
               />
             </div>
           </div>

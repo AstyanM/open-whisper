@@ -214,7 +214,7 @@ class SessionRepository:
 
             if date_to:
                 conditions.append("started_at <= ?")
-                params.append(date_to)
+                params.append(date_to + "T23:59:59")
 
             if duration_min is not None:
                 conditions.append("duration_s >= ?")

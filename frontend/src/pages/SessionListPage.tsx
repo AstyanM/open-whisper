@@ -73,10 +73,14 @@ export function SessionListPage() {
   const [collapsingIds, setCollapsingIds] = useState<Set<number>>(new Set());
   const [fetchId, setFetchId] = useState(0);
 
-  // Derive filters from URL params
+  // Derive filters from URL params — depend on the string representation
+  // to avoid re-creating the object when React Router v7 returns a new
+  // URLSearchParams reference for the same URL.
+  const searchString = searchParams.toString();
   const filters = useMemo(
     () => parseFiltersFromParams(searchParams),
-    [searchParams],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searchString],
   );
 
   const isSearching = useMemo(
@@ -247,7 +251,7 @@ export function SessionListPage() {
                   : "grid-rows-[1fr] mb-3",
               )}
             >
-              <div className="min-h-0 overflow-hidden">
+              <div className="min-h-0 overflow-hidden px-1 -mx-1 pt-1 -mt-1 pb-1 -mb-1">
                 <Card
                   className={cn(
                     "cursor-pointer transition-all duration-300",
