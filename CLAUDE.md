@@ -107,7 +107,8 @@ openwhisper/
 │       ├── search/
 │       │   ├── embedding.py     # Multilingual ONNX embedding function (paraphrase-multilingual-MiniLM-L12-v2)
 │       │   ├── vector_store.py  # ChromaDB singleton (index, search, delete)
-│       │   └── backfill.py      # Backfill existing sessions into ChromaDB
+│       │   ├── backfill.py      # Backfill existing sessions into ChromaDB
+│       │   └── stopwords.json   # Multilingual stopwords for exact-match filtering (7 languages)
 │       ├── storage/
 │       │   ├── database.py      # SQLite init + migrations (V0→V1)
 │       │   └── repository.py    # CRUD for sessions & segments
@@ -262,6 +263,7 @@ Upload audio files for offline transcription (instead of live microphone capture
 - **Phase 4.5** (LLM post-processing): Completed — OpenAI-compatible LLM integration (summarize, to-do list, reformulate), ScenarioCards/ScenarioResult UI, auto-summarize on session end.
 - **Phase 4.6** (File transcription): Completed — Audio file upload, drag-and-drop UI, streaming progress, file_transcriber backend, WebSocket progress channel.
 - **Phase 4.6b** (Search improvements): Completed — Multilingual ONNX embeddings (paraphrase-multilingual-MiniLM-L12-v2), auto-migration from English model, search state persisted in URL params.
+- **Phase 4.6c** (Search quality): Completed — Summary-first indexing (summaries preferred over raw text), configurable distance threshold, exact keyword match ranking with multilingual stopword filtering, relevance scores (sqrt cosine) with UI indicators.
 - See `prd.md` for full roadmap and feature backlog.
 
 ## Data Model (SQLite)
@@ -275,13 +277,18 @@ Migrations tracked via `PRAGMA user_version` (current: V1 — added `filename` c
 ## Semantic Search (ChromaDB)
 
 - **Storage**: `./data/chroma/` directory (sibling to SQLite `sessions.db`)
-- **Collection**: `sessions` — one document per session containing full concatenated text
+- **Collection**: `sessions` — one document per session (summary preferred, full text as fallback)
 - **Metadata per document**: session_id, language, mode, duration_s, started_at
 - **Embedding model**: `paraphrase-multilingual-MiniLM-L12-v2` (384-dim, 50+ languages, ONNX, downloaded to `~/.cache/chroma/onnx_models/` on first use)
 - **Embedding function**: Custom `MultilingualEmbeddingFunction` in `backend/src/search/embedding.py` (ONNX + tokenizers, no PyTorch)
-- **Config**: `search.embedding_model` in `config.yaml` (configurable, auto-migration on model change)
-- **Indexing**: Automatic on session end (in `ws.py`), deleted on session removal (in `routes.py`)
-- **Backfill**: Auto-indexes existing sessions on first startup if ChromaDB collection is empty or embedding model changed
+- **Indexing strategy**: Summary-preferred — indexes LLM summary when available (concise, topic-focused), falls back to full transcript text. Re-indexes automatically after auto-summarize or manual summarize.
+- **Search ranking**: Two-tier ranking: (1) exact keyword matches first (all non-stopword query words found in document), (2) semantic-only matches second. Both tiers sorted by cosine similarity.
+- **Exact match logic**: Accent-insensitive + case-insensitive keyword matching with multilingual stopword filtering (`backend/src/search/stopwords.json` — fr, en, es, pt, de, it, nl).
+- **Distance threshold**: Configurable max cosine distance (`search.distance_threshold`, default 0.75). Results beyond threshold are filtered out.
+- **Relevance scores**: `sqrt(max(0, 1 - cosine_distance))` — displayed as percentage in UI with color-coded progress bar (green/amber/red) + "Exact" badge.
+- **Config**: `search.embedding_model` and `search.distance_threshold` in `config.yaml` (configurable, auto-migration on model or strategy change)
+- **Indexing**: Automatic on session end (in `ws.py`), re-indexed after summarization, deleted on session removal (in `routes.py`)
+- **Backfill**: Auto-indexes existing sessions on first startup if ChromaDB collection is empty, embedding model changed, or indexing strategy changed
 - **API**: `GET /api/sessions/search?q=...&language=...&mode=...&date_from=...&date_to=...&duration_min=...&duration_max=...`
 - **Graceful degradation**: If ChromaDB init fails, search falls back to SQL-only filtering
 

@@ -12,6 +12,7 @@ export interface SessionSummary {
   preview?: string;
   filename?: string | null;
   relevance?: number;
+  exact_match?: boolean;
 }
 
 export interface Segment {

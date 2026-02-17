@@ -1,8 +1,10 @@
 """REST API routes for health check, config, and session management."""
 
+import json
 import logging
 import math
 import tempfile
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -239,7 +241,33 @@ async def list_sessions(limit: int = 50, offset: int = 0):
     }
 
 
-def _session_to_dict(s, preview: str | None = None, relevance: float | None = None) -> dict:
+
+def _strip_accents(text: str) -> str:
+    """Remove accents/diacritics for accent-insensitive matching."""
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+# Stopwords stripped from query for exact-match keyword checking (not for cosine similarity).
+_STOPWORDS_PATH = Path(__file__).resolve().parent.parent / "search" / "stopwords.json"
+with open(_STOPWORDS_PATH, encoding="utf-8") as _f:
+    _STOPWORDS: set[str] = {w for words in json.load(_f).values() for w in words}
+
+
+def _is_exact_match(query: str, document: str) -> bool:
+    """Check if ALL non-stopword query words appear in the document (case + accent insensitive)."""
+    norm_doc = _strip_accents(document).lower()
+    words = _strip_accents(query).lower().split()
+    content_words = [w for w in words if w not in _STOPWORDS]
+    return all(w in norm_doc for w in content_words) if content_words else False
+
+
+def _session_to_dict(
+    s,
+    preview: str | None = None,
+    relevance: float | None = None,
+    exact_match: bool | None = None,
+) -> dict:
     d = {
         "id": s.id,
         "mode": s.mode,
@@ -255,6 +283,8 @@ def _session_to_dict(s, preview: str | None = None, relevance: float | None = No
         d["preview"] = preview
     if relevance is not None:
         d["relevance"] = relevance
+    if exact_match is not None:
+        d["exact_match"] = exact_match
     return d
 
 
@@ -274,6 +304,7 @@ async def search_sessions_endpoint(
     repo = _get_repo()
     session_ids = None
     relevance_scores: dict[int, float] = {}
+    exact_matches: set[int] = set()
 
     if q.strip():
         # Build ChromaDB where clause for metadata pre-filtering
@@ -300,10 +331,21 @@ async def search_sessions_endpoint(
                 where=chroma_where,
                 distance_threshold=threshold,
             )
-            session_ids = [sid for sid, _ in search_results]
+
+            # Classify exact matches (all query words in document)
+            for sid, d, doc in search_results:
+                if _is_exact_match(q.strip(), doc):
+                    exact_matches.add(sid)
+
+            # Rank: exact matches first (by distance), then non-exact (by distance)
+            exact = [(sid, d) for sid, d, _ in search_results if sid in exact_matches]
+            non_exact = [(sid, d) for sid, d, _ in search_results if sid not in exact_matches]
+            ranked = exact + non_exact
+
+            session_ids = [sid for sid, _ in ranked]
             relevance_scores = {
                 sid: round(math.sqrt(max(0.0, 1.0 - d)), 4)
-                for sid, d in search_results
+                for sid, d in ranked
             }
         except Exception as e:
             logger.warning(f"ChromaDB search failed, falling back to SQL: {e}")
@@ -328,6 +370,7 @@ async def search_sessions_endpoint(
                 s,
                 preview=previews.get(s.id, ""),
                 relevance=relevance_scores.get(s.id),
+                exact_match=s.id in exact_matches if exact_matches else None,
             )
             for s in sessions
         ],

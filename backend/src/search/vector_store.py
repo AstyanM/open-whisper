@@ -158,8 +158,8 @@ async def search_sessions(
     n_results: int = 50,
     where: dict | None = None,
     distance_threshold: float | None = None,
-) -> list[tuple[int, float]]:
-    """Semantic search. Returns ordered list of (session_id, distance) by relevance.
+) -> list[tuple[int, float, str]]:
+    """Semantic search. Returns ordered list of (session_id, distance, document) by relevance.
 
     Distance is cosine distance: 0.0 = identical, 2.0 = opposite.
     Results with distance > distance_threshold are filtered out.
@@ -170,7 +170,7 @@ async def search_sessions(
     kwargs: dict = {
         "query_texts": [query],
         "n_results": min(n_results, collection.count() or 1),
-        "include": ["distances"],
+        "include": ["distances", "documents"],
     }
     if where:
         kwargs["where"] = where
@@ -182,13 +182,15 @@ async def search_sessions(
 
     ids = results["ids"][0] if results["ids"] else []
     distances = results["distances"][0] if results["distances"] else []
+    documents = results["documents"][0] if results.get("documents") else [""] * len(ids)
 
     pairs = list(zip(
         [int(sid) for sid in ids],
         [float(d) for d in distances],
+        [str(doc) for doc in documents],
     ))
 
     if distance_threshold is not None:
-        pairs = [(sid, d) for sid, d in pairs if d <= distance_threshold]
+        pairs = [(sid, d, doc) for sid, d, doc in pairs if d <= distance_threshold]
 
     return pairs

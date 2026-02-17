@@ -36,7 +36,7 @@ All modes use a local faster-whisper engine running directly in the Python backe
 - **File upload transcription** — drag-and-drop audio files (WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus) with streaming progress
 - **LLM post-processing** (optional) — summarize, extract to-do lists, or reformulate transcriptions via any OpenAI-compatible API (Ollama, LM Studio, etc.)
 - **Auto-summarize** — sessions automatically summarized by LLM on completion (configurable)
-- **Multilingual semantic search** — ChromaDB + paraphrase-multilingual-MiniLM-L12-v2 embeddings (50+ languages, ONNX)
+- **Multilingual semantic search** — ChromaDB + multilingual embeddings (50+ languages, ONNX), summary-first indexing, exact keyword match boosting, configurable distance threshold, relevance scores
 - **Always-on-top overlay** — transparent, click-through indicator (mic status, language, mode)
 - **System tray** — quick access menu, language switching
 - **Multiple Whisper model sizes** — tiny, base, small, medium, large-v3, large-v3-turbo
@@ -125,7 +125,8 @@ openwhisper/
 │   │   ├── search/
 │   │   │   ├── embedding.py     # Multilingual ONNX embedding function
 │   │   │   ├── vector_store.py  # ChromaDB integration
-│   │   │   └── backfill.py      # Auto-index existing sessions
+│   │   │   ├── backfill.py      # Auto-index existing sessions
+│   │   │   └── stopwords.json   # Multilingual stopwords (7 languages)
 │   │   ├── storage/
 │   │   │   ├── database.py      # SQLite init + migrations (V0→V1)
 │   │   │   └── repository.py    # CRUD for sessions & segments
@@ -258,6 +259,7 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 | `models.llm.model` | `"mistral:7b"` | LLM model name |
 | `models.llm.auto_summarize` | `true` | Auto-summarize sessions on completion |
 | `search.embedding_model` | `"paraphrase-multilingual-MiniLM-L12-v2"` | Embedding model for semantic search (multilingual) |
+| `search.distance_threshold` | `0.75` | Max cosine distance for results (0.0–2.0). Lower = stricter |
 | `audio.device` | `"default"` | Microphone input device name or index |
 | `audio.chunk_duration_ms` | `80` | Audio chunk size in ms |
 | `overlay.enabled` | `true` | Show overlay window |
@@ -318,7 +320,7 @@ segments
 └── confidence    REAL
 ```
 
-Semantic search is powered by **ChromaDB** with multilingual embeddings (stored in `./data/chroma/`). Sessions are auto-indexed on completion and support semantic + metadata filtering (language, mode, date, duration). The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`) supports 50+ languages and runs via ONNX on CPU — no PyTorch needed.
+Semantic search is powered by **ChromaDB** with multilingual embeddings (stored in `./data/chroma/`). Sessions are indexed using their LLM summary when available (falls back to full transcript text). Search uses two-tier ranking: exact keyword matches appear first, then semantic-only matches — both sorted by cosine similarity. A configurable distance threshold filters out irrelevant results. The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`) supports 50+ languages and runs via ONNX on CPU — no PyTorch needed.
 
 ---
 
@@ -335,6 +337,7 @@ Semantic search is powered by **ChromaDB** with multilingual embeddings (stored 
 - [x] **Phase 4.5** — LLM post-processing (summarize, to-do list, reformulate via OpenAI-compatible API)
 - [x] **Phase 4.6** — File transcription (audio file upload, drag-and-drop, streaming progress)
 - [x] **Phase 4.6b** — Search improvements (multilingual ONNX embeddings, search state persisted in URL)
+- [x] **Phase 4.6c** — Search quality (summary-first indexing, distance threshold, exact match ranking, relevance scores)
 - [ ] **Phase 4.7** — Packaging & release (setup script, installer, GitHub release)
 - [ ] **Phase 5** — V2 features (export, speaker diarization, voice commands)
 

@@ -328,6 +328,11 @@ export function SessionListPage() {
                     {/* Relevance indicator (only during search) */}
                     {s.relevance != null && (
                       <div className="flex items-center gap-2 mt-1">
+                        {s.exact_match && (
+                          <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                            Exact
+                          </span>
+                        )}
                         <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                           <div
                             className={cn(

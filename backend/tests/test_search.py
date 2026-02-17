@@ -15,9 +15,9 @@ from src.search.vector_store import (
 )
 
 
-def ids_from(results: list[tuple[int, float]]) -> list[int]:
+def ids_from(results: list[tuple[int, float, str]]) -> list[int]:
     """Extract session IDs from search results."""
-    return [sid for sid, _ in results]
+    return [sid for sid, *_ in results]
 
 
 @pytest_asyncio.fixture
@@ -442,10 +442,11 @@ async def test_search_returns_distances(vector_store):
 
     results = await search_sessions("deep learning neural networks")
     assert len(results) == 2
-    # Each result is (session_id, distance)
-    for sid, dist in results:
+    # Each result is (session_id, distance, document)
+    for sid, dist, doc in results:
         assert isinstance(sid, int)
         assert isinstance(dist, float)
+        assert isinstance(doc, str)
         assert 0.0 <= dist <= 2.0
     # ML session should have lower distance (more relevant)
     assert results[0][0] == 1
@@ -480,7 +481,7 @@ async def test_distance_threshold_filters_irrelevant(vector_store):
     filtered = await search_sessions("medicine", distance_threshold=0.5)
     assert len(filtered) >= 1
     assert filtered[0][0] == 1  # Medicine session first
-    for _, dist in filtered:
+    for _, dist, _ in filtered:
         assert dist <= 0.5
 
 
@@ -531,3 +532,74 @@ async def test_index_falls_back_to_full_text(vector_store):
     results = await search_sessions("quantum computing")
     assert len(results) == 1
     assert results[0][0] == 1
+
+
+# ── Document Return Tests ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_search_returns_documents(vector_store):
+    """Search results should include the indexed document text."""
+    await index_session(
+        session_id=1,
+        full_text="Original long transcript about gardening tips",
+        summary="Tips for growing tomatoes in your garden",
+        language="en",
+        mode="transcription",
+        duration_s=120.0,
+        started_at="2026-01-15T10:00:00Z",
+    )
+
+    results = await search_sessions("tomato garden")
+    assert len(results) == 1
+    sid, dist, doc = results[0]
+    assert sid == 1
+    # Document should be the summary (preferred over full_text)
+    assert "tomatoes" in doc.lower()
+    assert "garden" in doc.lower()
+
+
+# ── Exact Match Helper Tests ──────────────────────────────────────
+
+
+class TestExactMatchHelpers:
+    """Tests for the exact match and stopword logic in routes."""
+
+    def test_strip_accents(self):
+        from src.api.routes import _strip_accents
+        assert _strip_accents("médecine") == "medecine"
+        assert _strip_accents("français") == "francais"
+        assert _strip_accents("hello") == "hello"
+        assert _strip_accents("über") == "uber"
+
+    def test_is_exact_match_basic(self):
+        from src.api.routes import _is_exact_match
+        doc = "Discussion sur les traitements médicaux et la médecine"
+        assert _is_exact_match("médecine", doc) is True
+        assert _is_exact_match("medecine", doc) is True  # Accent insensitive
+        assert _is_exact_match("MÉDECINE", doc) is True  # Case insensitive
+        assert _is_exact_match("astronomie", doc) is False
+
+    def test_is_exact_match_stopwords_ignored(self):
+        from src.api.routes import _is_exact_match
+        doc = "Discussion sur les traitements médicaux et la médecine"
+        # "de la" are stopwords, only "médecine" is checked
+        assert _is_exact_match("de la médecine", doc) is True
+        # "audio d'une fille" — "audio" and "fille" are content words not in doc
+        assert _is_exact_match("audio d'une fille qui parle de médecine", doc) is False
+
+    def test_is_exact_match_multi_word(self):
+        from src.api.routes import _is_exact_match
+        doc = "Budget trimestriel et objectifs de vente pour 2026"
+        assert _is_exact_match("budget vente", doc) is True
+        assert _is_exact_match("budget yoga", doc) is False
+
+    def test_is_exact_match_empty_query(self):
+        from src.api.routes import _is_exact_match
+        assert _is_exact_match("", "some document") is False
+        assert _is_exact_match("   ", "some document") is False
+
+    def test_is_exact_match_all_stopwords(self):
+        from src.api.routes import _is_exact_match
+        # Query with only stopwords should return False (no content words to match)
+        assert _is_exact_match("de la le", "anything") is False
