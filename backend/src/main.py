@@ -69,9 +69,12 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized")
 
     try:
-        await init_vector_store(config.storage.db_path)
+        needs_reindex = await init_vector_store(
+            config.storage.db_path,
+            embedding_model=config.search.embedding_model,
+        )
         collection = get_collection()
-        if collection.count() == 0:
+        if collection.count() == 0 or needs_reindex:
             repo = SessionRepository(db)
             count = await backfill_index(repo)
             if count:

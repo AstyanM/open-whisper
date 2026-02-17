@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,20 +20,36 @@ import type { SearchFilters } from "@/lib/api";
 
 interface SessionSearchBarProps {
   onFiltersChange: (filters: SearchFilters) => void;
+  initialFilters?: SearchFilters;
 }
 
-export function SessionSearchBar({ onFiltersChange }: SessionSearchBarProps) {
-  const [query, setQuery] = useState("");
-  const [language, setLanguage] = useState<string>("");
-  const [mode, setMode] = useState<string>("");
-  const [durationMin, setDurationMin] = useState<string>("");
-  const [durationMax, setDurationMax] = useState<string>("");
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
-  const [showFilters, setShowFilters] = useState(false);
+export function SessionSearchBar({ onFiltersChange, initialFilters }: SessionSearchBarProps) {
+  const [query, setQuery] = useState(initialFilters?.q ?? "");
+  const [language, setLanguage] = useState<string>(initialFilters?.language ?? "");
+  const [mode, setMode] = useState<string>(initialFilters?.mode ?? "");
+  const [durationMin, setDurationMin] = useState<string>(
+    initialFilters?.duration_min != null ? String(initialFilters.duration_min / 60) : ""
+  );
+  const [durationMax, setDurationMax] = useState<string>(
+    initialFilters?.duration_max != null ? String(initialFilters.duration_max / 60) : ""
+  );
+  const [dateFrom, setDateFrom] = useState<string>(initialFilters?.date_from ?? "");
+  const [dateTo, setDateTo] = useState<string>(initialFilters?.date_to ?? "");
 
-  // Debounced emission
+  const hasInitialAdvanced = !!(
+    initialFilters?.language || initialFilters?.mode ||
+    initialFilters?.duration_min != null || initialFilters?.duration_max != null ||
+    initialFilters?.date_from || initialFilters?.date_to
+  );
+  const [showFilters, setShowFilters] = useState(hasInitialAdvanced);
+  const isFirstRender = useRef(true);
+
+  // Debounced emission — skip initial mount (parent already has the filters from URL)
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       onFiltersChange({
         q: query || undefined,

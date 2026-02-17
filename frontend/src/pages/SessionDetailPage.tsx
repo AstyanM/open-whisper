@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ChevronRight, Copy, Check, FileAudio, RefreshCw, Sparkles, Loader2 } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, Check, FileAudio, RefreshCw, RotateCcw, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -155,7 +155,7 @@ export function SessionDetailPage() {
           <AlertCircle className="h-8 w-8 text-muted-foreground" />
         </div>
         <p className="text-muted-foreground">Session not found</p>
-        <Button variant="ghost" onClick={() => navigate("/sessions")}>
+        <Button variant="ghost" onClick={() => navigate(-1)}>
           Back to sessions
         </Button>
       </div>
@@ -241,7 +241,7 @@ export function SessionDetailPage() {
               {summarizing ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
+                <RotateCcw className="mr-2 h-4 w-4" />
               )}
               Regenerate
             </Button>

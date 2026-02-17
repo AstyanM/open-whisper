@@ -46,6 +46,13 @@ models:
     max_tokens: 512                         # Max output tokens for summary/rewrite
     auto_summarize: true                    # Auto-generate summary after each session
 
+# Semantic search settings
+search:
+  # Embedding model for semantic search (multilingual recommended for non-English)
+  # paraphrase-multilingual-MiniLM-L12-v2 — 50+ languages, 384-dim (default)
+  # all-MiniLM-L6-v2 — English-optimized, 384-dim (ChromaDB's original default)
+  embedding_model: "paraphrase-multilingual-MiniLM-L12-v2"
+
 # Audio capture settings
 audio:
   sample_rate: 16000          # Sample rate in Hz (16kHz for Whisper)

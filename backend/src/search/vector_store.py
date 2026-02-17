@@ -9,35 +9,75 @@ from typing import Any
 
 import chromadb
 
+from src.search.embedding import MultilingualEmbeddingFunction
+
 logger = logging.getLogger(__name__)
 
 _client: Any = None
 _collection: Any = None
+_embedding_fn: Any = None
 
 
-async def init_vector_store(db_path: str) -> None:
-    """Initialize ChromaDB PersistentClient next to the SQLite DB."""
-    global _client, _collection
+async def init_vector_store(
+    db_path: str,
+    embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2",
+) -> bool:
+    """Initialize ChromaDB PersistentClient next to the SQLite DB.
+
+    Returns True if existing collection was deleted (model change) and re-indexing is needed.
+    """
+    global _client, _collection, _embedding_fn
     chroma_dir = str(Path(db_path).parent / "chroma")
     loop = asyncio.get_event_loop()
+
+    # Load embedding model (may download on first run)
+    _embedding_fn = await loop.run_in_executor(
+        None, lambda: MultilingualEmbeddingFunction(model_name=embedding_model)
+    )
+
     _client = await loop.run_in_executor(
         None, lambda: chromadb.PersistentClient(path=chroma_dir)
     )
+
+    # Check if existing collection uses a different embedding model
+    needs_reindex = False
+    existing_names = await loop.run_in_executor(
+        None, lambda: [c.name for c in _client.list_collections()]
+    )
+    if "sessions" in existing_names:
+        existing = await loop.run_in_executor(
+            None, lambda: _client.get_collection("sessions")
+        )
+        stored_model = (existing.metadata or {}).get("embedding_model", "")
+        if stored_model != embedding_model:
+            logger.warning(
+                "Embedding model changed (%r -> %r). "
+                "Deleting ChromaDB collection for re-indexing.",
+                stored_model, embedding_model,
+            )
+            await loop.run_in_executor(
+                None, lambda: _client.delete_collection("sessions")
+            )
+            needs_reindex = True
+
     _collection = await loop.run_in_executor(
         None,
         lambda: _client.get_or_create_collection(
             name="sessions",
-            metadata={"hnsw:space": "cosine"},
+            metadata={"hnsw:space": "cosine", "embedding_model": embedding_model},
+            embedding_function=_embedding_fn,
         ),
     )
-    logger.info(f"ChromaDB initialized at {chroma_dir}")
+    logger.info("ChromaDB initialized at %s with model %s", chroma_dir, embedding_model)
+    return needs_reindex
 
 
 async def close_vector_store() -> None:
     """Clean up (ChromaDB PersistentClient auto-persists)."""
-    global _client, _collection
+    global _client, _collection, _embedding_fn
     _client = None
     _collection = None
+    _embedding_fn = None
 
 
 def get_collection() -> Any:

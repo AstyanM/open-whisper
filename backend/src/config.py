@@ -152,6 +152,13 @@ class BackendConfig(BaseModel):
     port: int = Field(default=8001, ge=1, le=65535)
 
 
+class SearchConfig(BaseModel):
+    embedding_model: str = Field(
+        default="paraphrase-multilingual-MiniLM-L12-v2",
+        description="Sentence-transformers ONNX model for semantic search embeddings",
+    )
+
+
 class AppConfig(BaseModel):
     language: str = Field(default="fr", description="Default transcription language")
     max_upload_size_mb: int = Field(
@@ -164,6 +171,7 @@ class AppConfig(BaseModel):
     models: ModelsConfig = ModelsConfig()
     audio: AudioConfig = AudioConfig()
     overlay: OverlayConfig = OverlayConfig()
+    search: SearchConfig = SearchConfig()
     storage: StorageConfig = StorageConfig()
     backend: BackendConfig = BackendConfig()
 

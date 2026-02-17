@@ -30,7 +30,7 @@ Python Backend (FastAPI + faster-whisper)
 | Audio | sounddevice (PortAudio wrapper) | 16kHz mono, 80ms chunks |
 | Transcription | faster-whisper (CTranslate2) | Whisper models (tiny → large-v3 / large-v3-turbo), CUDA or CPU |
 | Storage | SQLite via aiosqlite | Sessions + timestamped segments |
-| Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, local CPU |
+| Semantic search | ChromaDB + paraphrase-multilingual-MiniLM-L12-v2 | 384-dim multilingual embeddings, ONNX, local CPU |
 | LLM processing | openai SDK (AsyncOpenAI) | OpenAI-compatible API (Ollama, LM Studio, etc.) |
 | File upload | python-multipart | WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus |
 | Text injection | enigo 0.6 + arboard 3 (clipboard fallback) | Win32 SendInput |
@@ -105,6 +105,7 @@ openwhisper/
 │       ├── llm/
 │       │   └── client.py        # LLM client (OpenAI-compatible: summarize, rewrite, scenarios)
 │       ├── search/
+│       │   ├── embedding.py     # Multilingual ONNX embedding function (paraphrase-multilingual-MiniLM-L12-v2)
 │       │   ├── vector_store.py  # ChromaDB singleton (index, search, delete)
 │       │   └── backfill.py      # Backfill existing sessions into ChromaDB
 │       ├── storage/
@@ -260,6 +261,7 @@ Upload audio files for offline transcription (instead of live microphone capture
 - **Phase 4.4b** (Model migration): Completed — Replaced vLLM/Voxtral with faster-whisper. No external server needed.
 - **Phase 4.5** (LLM post-processing): Completed — OpenAI-compatible LLM integration (summarize, to-do list, reformulate), ScenarioCards/ScenarioResult UI, auto-summarize on session end.
 - **Phase 4.6** (File transcription): Completed — Audio file upload, drag-and-drop UI, streaming progress, file_transcriber backend, WebSocket progress channel.
+- **Phase 4.6b** (Search improvements): Completed — Multilingual ONNX embeddings (paraphrase-multilingual-MiniLM-L12-v2), auto-migration from English model, search state persisted in URL params.
 - See `prd.md` for full roadmap and feature backlog.
 
 ## Data Model (SQLite)
@@ -275,9 +277,11 @@ Migrations tracked via `PRAGMA user_version` (current: V1 — added `filename` c
 - **Storage**: `./data/chroma/` directory (sibling to SQLite `sessions.db`)
 - **Collection**: `sessions` — one document per session containing full concatenated text
 - **Metadata per document**: session_id, language, mode, duration_s, started_at
-- **Embedding model**: `all-MiniLM-L6-v2` (384-dim, downloaded to `~/.cache/chroma/` on first use, ~80MB)
+- **Embedding model**: `paraphrase-multilingual-MiniLM-L12-v2` (384-dim, 50+ languages, ONNX, downloaded to `~/.cache/chroma/onnx_models/` on first use)
+- **Embedding function**: Custom `MultilingualEmbeddingFunction` in `backend/src/search/embedding.py` (ONNX + tokenizers, no PyTorch)
+- **Config**: `search.embedding_model` in `config.yaml` (configurable, auto-migration on model change)
 - **Indexing**: Automatic on session end (in `ws.py`), deleted on session removal (in `routes.py`)
-- **Backfill**: Auto-indexes existing sessions on first startup if ChromaDB collection is empty
+- **Backfill**: Auto-indexes existing sessions on first startup if ChromaDB collection is empty or embedding model changed
 - **API**: `GET /api/sessions/search?q=...&language=...&mode=...&date_from=...&date_to=...&duration_min=...&duration_max=...`
 - **Graceful degradation**: If ChromaDB init fails, search falls back to SQL-only filtering
 

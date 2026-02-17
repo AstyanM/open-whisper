@@ -36,7 +36,7 @@ All modes use a local faster-whisper engine running directly in the Python backe
 - **File upload transcription** — drag-and-drop audio files (WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus) with streaming progress
 - **LLM post-processing** (optional) — summarize, extract to-do lists, or reformulate transcriptions via any OpenAI-compatible API (Ollama, LM Studio, etc.)
 - **Auto-summarize** — sessions automatically summarized by LLM on completion (configurable)
-- **Semantic search** — ChromaDB + all-MiniLM-L6-v2 embeddings for searching past sessions
+- **Multilingual semantic search** — ChromaDB + paraphrase-multilingual-MiniLM-L12-v2 embeddings (50+ languages, ONNX)
 - **Always-on-top overlay** — transparent, click-through indicator (mic status, language, mode)
 - **System tray** — quick access menu, language switching
 - **Multiple Whisper model sizes** — tiny, base, small, medium, large-v3, large-v3-turbo
@@ -93,7 +93,7 @@ All modes use a local faster-whisper engine running directly in the Python backe
 | Audio | sounddevice (PortAudio) | 16 kHz mono, 80 ms chunks |
 | Transcription | faster-whisper (CTranslate2) | Whisper models (tiny → large-v3-turbo), CUDA or CPU |
 | Storage | SQLite (aiosqlite) | Sessions + timestamped segments |
-| Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, CPU inference |
+| Semantic search | ChromaDB + paraphrase-multilingual-MiniLM-L12-v2 | 384-dim multilingual embeddings, ONNX, CPU inference |
 | LLM processing | openai SDK (AsyncOpenAI) | Any OpenAI-compatible API (Ollama, LM Studio, etc.) |
 | File upload | python-multipart | WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus |
 | Text injection | enigo 0.6 + arboard 3 | Win32 SendInput, clipboard fallback |
@@ -123,6 +123,7 @@ openwhisper/
 │   │   ├── llm/
 │   │   │   └── client.py        # LLM client (OpenAI-compatible: summarize, rewrite, scenarios)
 │   │   ├── search/
+│   │   │   ├── embedding.py     # Multilingual ONNX embedding function
 │   │   │   ├── vector_store.py  # ChromaDB integration
 │   │   │   └── backfill.py      # Auto-index existing sessions
 │   │   ├── storage/
@@ -256,6 +257,7 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 | `models.llm.api_url` | `"http://localhost:11434/v1"` | OpenAI-compatible API endpoint |
 | `models.llm.model` | `"mistral:7b"` | LLM model name |
 | `models.llm.auto_summarize` | `true` | Auto-summarize sessions on completion |
+| `search.embedding_model` | `"paraphrase-multilingual-MiniLM-L12-v2"` | Embedding model for semantic search (multilingual) |
 | `audio.device` | `"default"` | Microphone input device name or index |
 | `audio.chunk_duration_ms` | `80` | Audio chunk size in ms |
 | `overlay.enabled` | `true` | Show overlay window |
@@ -316,7 +318,7 @@ segments
 └── confidence    REAL
 ```
 
-Semantic search is powered by **ChromaDB** (stored in `./data/chroma/`), which auto-indexes sessions on completion and supports full-text + metadata filtering.
+Semantic search is powered by **ChromaDB** with multilingual embeddings (stored in `./data/chroma/`). Sessions are auto-indexed on completion and support semantic + metadata filtering (language, mode, date, duration). The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`) supports 50+ languages and runs via ONNX on CPU — no PyTorch needed.
 
 ---
 
@@ -332,6 +334,7 @@ Semantic search is powered by **ChromaDB** (stored in `./data/chroma/`), which a
 - [x] **Phase 4.4b** — Switch from vLLM/Voxtral to faster-whisper (no external server needed)
 - [x] **Phase 4.5** — LLM post-processing (summarize, to-do list, reformulate via OpenAI-compatible API)
 - [x] **Phase 4.6** — File transcription (audio file upload, drag-and-drop, streaming progress)
+- [x] **Phase 4.6b** — Search improvements (multilingual ONNX embeddings, search state persisted in URL)
 - [ ] **Phase 4.7** — Packaging & release (setup script, installer, GitHub release)
 - [ ] **Phase 5** — V2 features (export, speaker diarization, voice commands)
 

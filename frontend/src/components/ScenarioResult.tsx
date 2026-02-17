@@ -7,6 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { Scenario } from "@/lib/api";
 
 interface ScenarioResultProps {
@@ -17,11 +18,11 @@ interface ScenarioResultProps {
 
 const SCENARIO_META: Record<
   Scenario,
-  { title: string; icon: typeof FileText }
+  { title: string; icon: typeof FileText; color: string }
 > = {
-  summarize: { title: "Summary", icon: FileText },
-  todo_list: { title: "To-do List", icon: ListTodo },
-  reformulate: { title: "Reformulated Text", icon: Wand2 },
+  summarize: { title: "Summary", icon: FileText, color: "text-amber-500" },
+  todo_list: { title: "To-do List", icon: ListTodo, color: "text-emerald-500" },
+  reformulate: { title: "Reformulated Text", icon: Wand2, color: "text-sky-500" },
 };
 
 /** Render markdown checkboxes as styled HTML for todo_list results. */
@@ -93,7 +94,7 @@ export function ScenarioResult({
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Icon className="h-4 w-4 text-amber-500" />
+          <Icon className={cn("h-4 w-4", meta.color)} />
           {meta.title}
         </CardTitle>
         <div className="flex items-center gap-1">

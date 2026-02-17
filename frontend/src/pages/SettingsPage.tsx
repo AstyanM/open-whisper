@@ -120,18 +120,18 @@ export function SettingsPage() {
 
       {/* ── Banners ────────────────────────────────────────── */}
       {error && (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {showSuccess && (
-        <div className="rounded-md border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+        <div className="rounded-md border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
           Settings saved successfully.
         </div>
       )}
       {saveResult && saveResult.restart_required.length > 0 && (
-        <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-700 dark:text-yellow-400">
+        <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
           Some changes require a restart to take effect:{" "}
           {saveResult.restart_required.join(", ")}
         </div>
@@ -736,7 +736,6 @@ export function SettingsPage() {
               </Button>
               <Button
                 size="sm"
-                className="bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-stone-900 dark:hover:bg-amber-400"
                 onClick={handleSave}
                 disabled={saving}
               >

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertCircle, FileAudio, FileText, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,20 +23,41 @@ import {
 import { cn } from "@/lib/utils";
 import type { SessionSummary, SearchFilters } from "@/lib/api";
 
+function parseFiltersFromParams(params: URLSearchParams): SearchFilters {
+  const filters: SearchFilters = {};
+  const q = params.get("q");
+  const language = params.get("language");
+  const mode = params.get("mode");
+  const dateFrom = params.get("date_from");
+  const dateTo = params.get("date_to");
+  const durationMin = params.get("duration_min");
+  const durationMax = params.get("duration_max");
+
+  if (q) filters.q = q;
+  if (language) filters.language = language;
+  if (mode) filters.mode = mode;
+  if (dateFrom) filters.date_from = dateFrom;
+  if (dateTo) filters.date_to = dateTo;
+  if (durationMin) filters.duration_min = parseFloat(durationMin);
+  if (durationMax) filters.duration_max = parseFloat(durationMax);
+
+  return filters;
+}
+
 function SessionCardSkeleton() {
   return (
     <Card className="mb-3">
-      <CardContent className="flex items-center justify-between py-3">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-5 w-24 rounded-full" />
-            <Skeleton className="h-4 w-10" />
+      <CardContent className="flex flex-col gap-1.5 py-3">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-5 w-14 rounded-full" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="h-4 w-10" />
+          <div className="ml-auto flex items-center gap-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-8 w-8 rounded" />
           </div>
-          <Skeleton className="h-3 w-28" />
-          <Skeleton className="h-3 w-56" />
         </div>
-        <Skeleton className="h-8 w-8 rounded" />
+        <Skeleton className="h-3 w-3/4" />
       </CardContent>
     </Card>
   );
@@ -44,13 +65,19 @@ function SessionCardSkeleton() {
 
 export function SessionListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set());
   const [collapsingIds, setCollapsingIds] = useState<Set<number>>(new Set());
-  const [filters, setFilters] = useState<SearchFilters>({});
   const [fetchId, setFetchId] = useState(0);
+
+  // Derive filters from URL params
+  const filters = useMemo(
+    () => parseFiltersFromParams(searchParams),
+    [searchParams],
+  );
 
   const isSearching = useMemo(
     () => Object.values(filters).some((v) => v != null && v !== ""),
@@ -59,6 +86,8 @@ export function SessionListPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     const hasFilters = Object.values(filters).some(
       (v) => v != null && v !== "",
     );
@@ -83,11 +112,23 @@ export function SessionListPage() {
     };
   }, [filters, fetchId]);
 
-  const handleFiltersChange = useCallback((newFilters: SearchFilters) => {
-    setLoading(true);
-    setError(null);
-    setFilters(newFilters);
-  }, []);
+  const handleFiltersChange = useCallback(
+    (newFilters: SearchFilters) => {
+      // Sync filters to URL params — the useEffect handles loading state
+      const params = new URLSearchParams();
+      if (newFilters.q) params.set("q", newFilters.q);
+      if (newFilters.language) params.set("language", newFilters.language);
+      if (newFilters.mode) params.set("mode", newFilters.mode);
+      if (newFilters.date_from) params.set("date_from", newFilters.date_from);
+      if (newFilters.date_to) params.set("date_to", newFilters.date_to);
+      if (newFilters.duration_min != null)
+        params.set("duration_min", String(newFilters.duration_min));
+      if (newFilters.duration_max != null)
+        params.set("duration_max", String(newFilters.duration_max));
+      setSearchParams(params, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -126,7 +167,7 @@ export function SessionListPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
-        <SessionSearchBar onFiltersChange={handleFiltersChange} />
+        <SessionSearchBar onFiltersChange={handleFiltersChange} initialFilters={filters} />
         <div>
           {Array.from({ length: 4 }).map((_, i) => (
             <SessionCardSkeleton key={i} />
@@ -139,7 +180,7 @@ export function SessionListPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
-        <SessionSearchBar onFiltersChange={handleFiltersChange} />
+        <SessionSearchBar onFiltersChange={handleFiltersChange} initialFilters={filters} />
         <div className="py-12 text-center space-y-3">
           <AlertCircle className="mx-auto h-10 w-10 text-destructive/60" />
           <p className="text-destructive">{error}</p>
@@ -155,7 +196,7 @@ export function SessionListPage() {
   if (sessions.length === 0) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
-        <SessionSearchBar onFiltersChange={handleFiltersChange} />
+        <SessionSearchBar onFiltersChange={handleFiltersChange} initialFilters={filters} />
         <div className="py-12 text-center space-y-3">
           {isSearching ? (
             <>
@@ -182,7 +223,7 @@ export function SessionListPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <SessionSearchBar onFiltersChange={handleFiltersChange} />
+      <SessionSearchBar onFiltersChange={handleFiltersChange} initialFilters={filters} />
 
       {/* Session count */}
       <div className="flex items-center justify-between">
@@ -222,62 +263,64 @@ export function SessionListPage() {
                   )}
                   onClick={() => navigate(`/sessions/${s.id}`)}
                 >
-                  <CardContent className="flex items-center justify-between py-3">
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">
-                          {languageLabel(s.language)}
-                        </Badge>
-                        <Badge
-                          variant={
-                            s.mode === "transcription"
-                              ? "transcription"
-                              : s.mode === "file"
-                                ? "file"
-                                : "dictation"
-                          }
-                        >
-                          {s.mode === "file" ? (
-                            <><FileAudio className="mr-1 h-3 w-3" />file</>
-                          ) : (
-                            s.mode
-                          )}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {formatDuration(s.duration_s)}
-                        </span>
-                      </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="text-xs text-muted-foreground">
-                            {formatRelativeDate(s.started_at)}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" align="start">
-                          {formatDate(s.started_at)}
-                        </TooltipContent>
-                      </Tooltip>
+                  <CardContent className="flex flex-col gap-1.5 py-3">
+                    {/* Row 1: metadata + date + delete */}
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">
+                        {languageLabel(s.language)}
+                      </Badge>
+                      <Badge
+                        variant={
+                          s.mode === "transcription"
+                            ? "transcription"
+                            : s.mode === "file"
+                              ? "file"
+                              : "dictation"
+                        }
+                      >
+                        {s.mode === "file" ? (
+                          <><FileAudio className="mr-1 h-3 w-3" />file</>
+                        ) : (
+                          s.mode
+                        )}
+                      </Badge>
                       {s.filename && (
-                        <span className="truncate text-xs text-muted-foreground/60">
+                        <span className="truncate max-w-[180px] text-xs text-muted-foreground/70">
                           {s.filename}
                         </span>
                       )}
-                      {s.summary ? (
-                        <p className="truncate text-xs text-amber-600/70 dark:text-amber-400/70 flex items-center gap-1">
-                          <Sparkles className="h-3 w-3 shrink-0" />
-                          {s.summary}
-                        </p>
-                      ) : s.preview ? (
-                        <p className="truncate text-xs text-muted-foreground/70">
-                          {s.preview}
-                        </p>
-                      ) : null}
+                      <span className="text-xs text-muted-foreground">
+                        {formatDuration(s.duration_s)}
+                      </span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {formatRelativeDate(s.started_at)}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" align="end">
+                            {formatDate(s.started_at)}
+                          </TooltipContent>
+                        </Tooltip>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <DeleteSessionDialog
+                            onConfirm={() => handleDelete(s.id)}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <DeleteSessionDialog
-                        onConfirm={() => handleDelete(s.id)}
-                      />
-                    </div>
+                    {/* Row 2: summary or preview (2 lines max) */}
+                    {s.summary ? (
+                      <p className="line-clamp-2 text-xs text-amber-600/70 dark:text-amber-400/70 flex items-start gap-1">
+                        <Sparkles className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span className="line-clamp-2">{s.summary}</span>
+                      </p>
+                    ) : s.preview ? (
+                      <p className="line-clamp-2 text-xs text-muted-foreground/70">
+                        {s.preview}
+                      </p>
+                    ) : null}
                   </CardContent>
                 </Card>
               </div>
