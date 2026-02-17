@@ -145,14 +145,14 @@ async def test_update_config_language(client, tmp_path):
 
     from unittest.mock import patch
 
-    with patch("src.api.routes.config.find_config_path", return_value=config_file):
-        resp = await client.put("/api/config", json={"language": "en"})
+    with patch("src.api.routes.config.get_config_path", return_value=config_file):
+        resp = await client.put("/api/config", json={"language": "fr"})
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
     assert "language" in data["applied"]
-    assert src.main.config.language == "en"
+    assert src.main.config.language == "fr"
 
 
 @pytest.mark.asyncio
@@ -183,7 +183,7 @@ async def test_update_config_restart_required(client, tmp_path):
 
     from unittest.mock import patch
 
-    with patch("src.api.routes.config.find_config_path", return_value=config_file):
+    with patch("src.api.routes.config.get_config_path", return_value=config_file):
         resp = await client.put(
             "/api/config", json={"audio": {"device": "my-mic"}}
         )

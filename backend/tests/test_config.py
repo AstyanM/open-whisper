@@ -19,8 +19,8 @@ def test_load_default_config():
 def test_config_defaults():
     """Test that defaults are applied when fields are missing."""
     config = AppConfig.model_validate({})
-    assert config.language == "fr"
-    assert config.models.transcription.model_size == "small"
+    assert config.language == "en"
+    assert config.models.transcription.model_size == "auto"
     assert config.models.transcription.beam_size == 5
     assert config.audio.chunk_duration_ms == 80
     assert config.backend.host == "127.0.0.1"

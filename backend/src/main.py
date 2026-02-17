@@ -49,9 +49,6 @@ async def lifespan(app: FastAPI):
 
     try:
         config = load_config()
-    except FileNotFoundError:
-        logger.error("config.yaml not found. Cannot start backend.")
-        raise
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
         raise

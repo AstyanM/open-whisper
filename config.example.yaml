@@ -1,9 +1,10 @@
-# Voice-to-Speech Local — Configuration Template
-# Copy this file to config.yaml and adjust settings as needed.
+# OpenWhisper — Configuration Template
+# Copy this file to config.yaml — all values shown are the defaults.
+# You only need to override the settings you want to change.
 
 # Default transcription language.
 # Supported: fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko
-language: "fr"
+language: "en"
 
 # Maximum file upload size in MB (50-1024)
 max_upload_size_mb: 500
@@ -53,8 +54,8 @@ search:
   # all-MiniLM-L6-v2 — English-optimized, 384-dim (ChromaDB's original default)
   embedding_model: "paraphrase-multilingual-MiniLM-L12-v2"
   # Maximum cosine distance for search results (0.0 = exact match, 2.0 = opposite)
-  # Lower values = stricter filtering. Recommended: 0.5-0.9
-  distance_threshold: 0.75
+  # Higher values = more permissive. Recommended: 0.75-1.0
+  distance_threshold: 1.0
 
 # Audio capture settings
 audio:
@@ -65,13 +66,13 @@ audio:
 
 # Overlay window settings
 overlay:
-  enabled: true
+  enabled: false              # Disabled by default (requires Tauri desktop app)
   position: "top-right"       # top-left, top-right, bottom-left, bottom-right
   opacity: 0.85               # 0.1 to 1.0
   size: "small"               # small, medium
   show_language: true          # Show language code (FR, EN...)
-  show_mode: false             # Show active mode (TRS/DIC)
-  show_duration: false         # Show recording duration timer
+  show_mode: true              # Show active mode (TRS/DIC)
+  show_duration: true          # Show recording duration timer
 
 # Storage settings
 storage:

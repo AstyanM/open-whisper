@@ -104,9 +104,9 @@ All modes use a local faster-whisper engine running directly in the Python backe
 
 ```
 openwhisper/
+├── setup.bat                    # Automated setup script (Windows)
 ├── config.example.yaml          # Configuration template
 ├── package.json                 # Root convenience scripts
-├── prd.md                       # Product requirements document
 │
 ├── backend/                     # Python backend (FastAPI)
 │   ├── pyproject.toml
@@ -169,52 +169,61 @@ openwhisper/
 
 ## Prerequisites
 
-| Requirement | Version |
-|-------------|---------|
-| **OS** | Windows 10/11 (64-bit) |
-| **Python** | 3.13+ |
-| **Node.js** | 20+ |
-| **Rust** | 1.75+ |
-| **uv** | Latest (Python package manager) |
-| **GPU** *(optional)* | NVIDIA with CUDA 12.x for accelerated transcription |
+| Requirement | Version | Install |
+|-------------|---------|---------|
+| **OS** | Windows 10/11 (64-bit) | |
+| **Python** | 3.12+ | [python.org](https://www.python.org/downloads/) |
+| **Node.js** | 20+ | [nodejs.org](https://nodejs.org/) |
+| **Rust** | 1.75+ *(for Tauri builds only)* | [rustup.rs](https://rustup.rs/) |
+| **Visual Studio 2022** | Community *(for Tauri builds only)* | [VS Installer](https://visualstudio.microsoft.com/) — select "Desktop development with C++" |
+| **GPU** *(optional)* | NVIDIA with CUDA 12.x | Accelerates transcription |
 
-> **Note**: A GPU is **not required**. faster-whisper runs on CPU (use `small` or `base` model for best CPU performance). With an NVIDIA GPU + CUDA, you can use `large-v3-turbo` for higher accuracy.
+> **Note**: A GPU is **not required**. The setup auto-selects `large-v3-turbo` on GPU or `small` on CPU. Rust and Visual Studio are only needed if you want to build the Tauri desktop app — the backend + web frontend work without them.
 
 ---
 
 ## Installation
 
-### 1. Clone the repository
+### Quick setup (recommended)
 
 ```bash
 git clone https://github.com/AstyanM/openwhisper.git
 cd openwhisper
+setup.bat
 ```
 
-### 2. Setup backend
+The setup script automatically:
+- Checks prerequisites (Python, Node.js, uv)
+- Creates the Python virtual environment and installs backend dependencies
+- Installs frontend npm dependencies
+- Creates `config.yaml` from the template
+- Detects MSVC/Windows SDK and generates the Cargo linker config for Tauri builds
+
+### Manual setup
+
+If you prefer to set up manually or are troubleshooting:
 
 ```bash
+# 1. Clone
+git clone https://github.com/AstyanM/openwhisper.git
+cd openwhisper
+
+# 2. Backend
 cd backend
-uv venv .venv --python 3.13
+uv venv --python 3.13
 uv pip install -e ".[dev]"
-```
+cd ..
 
-The Whisper model is downloaded automatically on first startup.
-
-### 3. Setup frontend
-
-```bash
+# 3. Frontend
 cd frontend
 npm install
+cd ..
+
+# 4. Config (optional — app works with defaults if missing)
+copy config.example.yaml config.yaml
 ```
 
-### 4. Copy configuration
-
-```bash
-cp config.example.yaml config.yaml
-```
-
-Edit `config.yaml` to set your preferred language, model size, audio device, and other options.
+The Whisper model (~1.5 GB for large-v3-turbo, ~500 MB for small) is downloaded automatically on first startup.
 
 ---
 
@@ -255,9 +264,9 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `language` | `"fr"` | Transcription language (13 supported) |
+| `language` | `"en"` | Transcription language (13 supported) |
 | `max_upload_size_mb` | `500` | Max file upload size in MB (50–1024) |
-| `models.transcription.model_size` | `"auto"` | Whisper model: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` |
+| `models.transcription.model_size` | `"auto"` | Whisper model: `auto`, `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`. Auto = large-v3-turbo on GPU, small on CPU |
 | `models.transcription.device` | `"auto"` | Inference device: `auto`, `cuda`, `cpu` |
 | `models.transcription.compute_type` | `"auto"` | Precision: `auto`, `float16`, `int8`, `int8_float16` |
 | `models.transcription.beam_size` | `5` | 1 = greedy (fast), 5 = beam search (accurate) |
@@ -268,10 +277,10 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 | `models.llm.model` | `"mistral:7b"` | LLM model name |
 | `models.llm.auto_summarize` | `true` | Auto-summarize sessions on completion |
 | `search.embedding_model` | `"paraphrase-multilingual-MiniLM-L12-v2"` | Embedding model for semantic search (multilingual) |
-| `search.distance_threshold` | `0.75` | Max cosine distance for results (0.0–2.0). Lower = stricter |
+| `search.distance_threshold` | `1.0` | Max cosine distance for results (0.0–2.0). Lower = stricter |
 | `audio.device` | `"default"` | Microphone input device name or index |
 | `audio.chunk_duration_ms` | `80` | Audio chunk size in ms |
-| `overlay.enabled` | `true` | Show overlay window |
+| `overlay.enabled` | `false` | Show overlay window (requires Tauri desktop app) |
 | `overlay.position` | `"top-right"` | Overlay screen position |
 | `backend.port` | `8001` | Backend API port |
 
@@ -347,7 +356,7 @@ Semantic search is powered by **ChromaDB** with multilingual embeddings (stored 
 - [x] **Phase 4.6** — File transcription (audio file upload, drag-and-drop, streaming progress)
 - [x] **Phase 4.6b** — Search improvements (multilingual ONNX embeddings, search state persisted in URL)
 - [x] **Phase 4.6c** — Search quality (summary-first indexing, distance threshold, exact match ranking, relevance scores)
-- [ ] **Phase 4.7** — Packaging & release (setup script, installer, GitHub release)
+- [x] **Phase 4.7** — Packaging & release (setup script, default config, graceful fallback)
 - [ ] **Phase 5** — V2 features (export, speaker diarization, voice commands)
 
 ---

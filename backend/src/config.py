@@ -1,14 +1,17 @@
 """Configuration loading and validation using Pydantic.
 
 Loads config.yaml from the project root and validates all fields
-with sensible defaults.
+with sensible defaults. Falls back to defaults if config.yaml is missing.
 """
 
+import logging
 from pathlib import Path
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 SUPPORTED_LANGUAGES = (
@@ -22,7 +25,7 @@ class ShortcutsConfig(BaseModel):
 
 
 class TranscriptionModelConfig(BaseModel):
-    model_size: str = "small"
+    model_size: str = "auto"
     device: Literal["cuda", "cpu", "auto"] = "auto"
     compute_type: Literal["float16", "float32", "int8", "int8_float16", "auto"] = "auto"
     beam_size: int = Field(default=5, ge=1, le=20)
@@ -134,13 +137,13 @@ class AudioConfig(BaseModel):
 
 
 class OverlayConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     position: Literal["top-left", "top-right", "bottom-left", "bottom-right"] = "top-right"
     opacity: float = Field(default=0.85, ge=0.1, le=1.0)
     size: Literal["small", "medium"] = "small"
     show_language: bool = True
-    show_mode: bool = False
-    show_duration: bool = False
+    show_mode: bool = True
+    show_duration: bool = True
 
 
 class StorageConfig(BaseModel):
@@ -158,7 +161,7 @@ class SearchConfig(BaseModel):
         description="Sentence-transformers ONNX model for semantic search embeddings",
     )
     distance_threshold: float = Field(
-        default=0.75,
+        default=1.0,
         ge=0.0,
         le=2.0,
         description="Maximum cosine distance for search results (0=exact, 2=opposite). Results above this are filtered out.",
@@ -166,7 +169,7 @@ class SearchConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    language: str = Field(default="fr", description="Default transcription language")
+    language: str = Field(default="en", description="Default transcription language")
     max_upload_size_mb: int = Field(
         default=500,
         ge=50,
@@ -182,8 +185,11 @@ class AppConfig(BaseModel):
     backend: BackendConfig = BackendConfig()
 
 
-def find_config_path() -> Path:
-    """Find config.yaml by walking up from backend/ to project root."""
+def find_config_path() -> Path | None:
+    """Find config.yaml by walking up from backend/ to project root.
+
+    Returns None if no config.yaml is found (instead of raising).
+    """
     candidates = [
         Path(__file__).resolve().parent.parent.parent / "config.yaml",
         Path.cwd() / "config.yaml",
@@ -192,16 +198,31 @@ def find_config_path() -> Path:
     for candidate in candidates:
         if candidate.exists():
             return candidate
-    raise FileNotFoundError(
-        "config.yaml not found. Expected at project root. "
-        "Copy config.example.yaml to config.yaml and adjust settings."
-    )
+    return None
+
+
+def get_config_path() -> Path:
+    """Return the path to config.yaml (existing or default location for creation)."""
+    path = find_config_path()
+    if path is not None:
+        return path
+    return Path(__file__).resolve().parent.parent.parent / "config.yaml"
 
 
 def load_config(path: Path | None = None) -> AppConfig:
-    """Load and validate configuration from config.yaml."""
+    """Load and validate configuration from config.yaml.
+
+    Falls back to Pydantic defaults if config.yaml is missing.
+    """
     if path is None:
         path = find_config_path()
+
+    if path is None:
+        logger.warning(
+            "config.yaml not found. Using default configuration. "
+            "Copy config.example.yaml to config.yaml to customize settings."
+        )
+        return AppConfig.model_validate({})
 
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)

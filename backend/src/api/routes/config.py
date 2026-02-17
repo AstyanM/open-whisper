@@ -5,7 +5,7 @@ import logging
 import yaml
 from fastapi import APIRouter, HTTPException, Request
 
-from src.config import AppConfig, find_config_path
+from src.config import AppConfig, get_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ async def update_config(request: Request):
     ]
 
     # Persist to YAML
-    config_path = find_config_path()
+    config_path = get_config_path()
     with open(config_path, "w", encoding="utf-8") as fh:
         yaml.dump(
             new_config.model_dump(),

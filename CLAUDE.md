@@ -281,6 +281,8 @@ Upload audio files for offline transcription (instead of live microphone capture
 - **Phase 4.6** (File transcription): Completed — Audio file upload, drag-and-drop UI, streaming progress, file_transcriber backend, WebSocket progress channel.
 - **Phase 4.6b** (Search improvements): Completed — Multilingual ONNX embeddings (paraphrase-multilingual-MiniLM-L12-v2), auto-migration from English model, search state persisted in URL params.
 - **Phase 4.6c** (Search quality): Completed — Summary-first indexing (summaries preferred over raw text), configurable distance threshold, exact keyword match ranking with multilingual stopword filtering, relevance scores (sqrt cosine) with UI indicators.
+- **Phase 4.6d** (Modularisation): Completed — Split routes.py into routes/ package, split SettingsPage.tsx into section components.
+- **Phase 4.7** (Packaging & Release): Completed — setup.bat script, graceful config fallback (no crash if config.yaml missing), updated Pydantic defaults (model_size=auto, language=en, overlay=false), config.example.yaml aligned with defaults, .cargo/config.toml auto-generated per machine, uv run in package.json scripts.
 - See `prd.md` for full roadmap and feature backlog.
 
 ## Data Model (SQLite)
@@ -301,7 +303,7 @@ Migrations tracked via `PRAGMA user_version` (current: V1 — added `filename` c
 - **Indexing strategy**: Summary-preferred — indexes LLM summary when available (concise, topic-focused), falls back to full transcript text. Re-indexes automatically after auto-summarize or manual summarize.
 - **Search ranking**: Two-tier ranking: (1) exact keyword matches first (all non-stopword query words found in document), (2) semantic-only matches second. Both tiers sorted by cosine similarity.
 - **Exact match logic**: Accent-insensitive + case-insensitive keyword matching with multilingual stopword filtering (`backend/src/search/stopwords.json` — fr, en, es, pt, de, it, nl).
-- **Distance threshold**: Configurable max cosine distance (`search.distance_threshold`, default 0.75). Results beyond threshold are filtered out.
+- **Distance threshold**: Configurable max cosine distance (`search.distance_threshold`, default 1.0). Results beyond threshold are filtered out.
 - **Relevance scores**: `sqrt(max(0, 1 - cosine_distance))` — displayed as percentage in UI with color-coded progress bar (green/amber/red) + "Exact" badge.
 - **Config**: `search.embedding_model` and `search.distance_threshold` in `config.yaml` (configurable, auto-migration on model or strategy change)
 - **Indexing**: Automatic on session end (in `ws.py`), re-indexed after summarization, deleted on session removal (in `routes/sessions.py`)
