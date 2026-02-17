@@ -97,7 +97,16 @@ openwhisper/
 │       ├── config.py            # Pydantic config loader (config.yaml)
 │       ├── exceptions.py        # Custom exception classes
 │       ├── api/
-│       │   ├── routes.py        # REST endpoints (health, sessions, config, search, LLM, file upload)
+│       │   ├── _helpers.py      # Shared helpers (_get_repo, _session_to_dict)
+│       │   ├── routes/          # REST endpoints (split by domain)
+│       │   │   ├── __init__.py  # Aggregated router
+│       │   │   ├── health.py    # GET /health
+│       │   │   ├── config.py    # GET/PUT /api/config (hot-reload)
+│       │   │   ├── audio.py     # GET /api/audio/devices
+│       │   │   ├── sessions.py  # CRUD /api/sessions
+│       │   │   ├── search.py    # GET /api/sessions/search (semantic + exact match)
+│       │   │   ├── llm.py       # POST /api/sessions/{id}/summarize, /api/llm/*
+│       │   │   └── upload.py    # POST /api/transcribe/file
 │       │   ├── ws.py            # WebSocket endpoints (audio stream, file transcription)
 │       │   └── _file_transcription_state.py  # Pending file upload state registry (REST→WS bridge)
 │       ├── audio/
@@ -136,6 +145,14 @@ openwhisper/
 │       │   ├── LogoMark.tsx             # Inline SVG logo component
 │       │   ├── ThemeProvider.tsx         # next-themes provider
 │       │   ├── ThemeToggle.tsx           # Dark/light mode toggle
+│       │   ├── settings/                # Settings page section components
+│       │   │   ├── RestartBadge.tsx
+│       │   │   ├── SettingsGeneralSection.tsx
+│       │   │   ├── SettingsAudioSection.tsx
+│       │   │   ├── SettingsOverlaySection.tsx
+│       │   │   ├── SettingsTranscriptionSection.tsx
+│       │   │   ├── SettingsSearchSection.tsx
+│       │   │   └── SettingsAdvancedSection.tsx
 │       │   └── ui/              # shadcn/ui primitives (alert-dialog, sonner, ...)
 │       ├── hooks/
 │       │   ├── useWebSocket.ts
@@ -287,7 +304,7 @@ Migrations tracked via `PRAGMA user_version` (current: V1 — added `filename` c
 - **Distance threshold**: Configurable max cosine distance (`search.distance_threshold`, default 0.75). Results beyond threshold are filtered out.
 - **Relevance scores**: `sqrt(max(0, 1 - cosine_distance))` — displayed as percentage in UI with color-coded progress bar (green/amber/red) + "Exact" badge.
 - **Config**: `search.embedding_model` and `search.distance_threshold` in `config.yaml` (configurable, auto-migration on model or strategy change)
-- **Indexing**: Automatic on session end (in `ws.py`), re-indexed after summarization, deleted on session removal (in `routes.py`)
+- **Indexing**: Automatic on session end (in `ws.py`), re-indexed after summarization, deleted on session removal (in `routes/sessions.py`)
 - **Backfill**: Auto-indexes existing sessions on first startup if ChromaDB collection is empty, embedding model changed, or indexing strategy changed
 - **API**: `GET /api/sessions/search?q=...&language=...&mode=...&date_from=...&date_to=...&duration_min=...&duration_max=...`
 - **Graceful degradation**: If ChromaDB init fails, search falls back to SQL-only filtering

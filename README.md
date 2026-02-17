@@ -115,7 +115,15 @@ openwhisper/
 │   │   ├── config.py            # Pydantic config loader
 │   │   ├── exceptions.py        # Custom exception classes
 │   │   ├── api/
-│   │   │   ├── routes.py        # REST endpoints (sessions, config, LLM, file upload)
+│   │   │   ├── _helpers.py      # Shared helpers (_get_repo, _session_to_dict)
+│   │   │   ├── routes/          # REST endpoints (split by domain)
+│   │   │   │   ├── health.py    # GET /health
+│   │   │   │   ├── config.py    # GET/PUT /api/config (hot-reload)
+│   │   │   │   ├── audio.py     # GET /api/audio/devices
+│   │   │   │   ├── sessions.py  # CRUD /api/sessions
+│   │   │   │   ├── search.py    # GET /api/sessions/search (semantic + exact match)
+│   │   │   │   ├── llm.py       # LLM endpoints (summarize, rewrite, process)
+│   │   │   │   └── upload.py    # POST /api/transcribe/file
 │   │   │   ├── ws.py            # WebSocket (audio + file transcription streaming)
 │   │   │   └── _file_transcription_state.py  # REST→WS state bridge for file uploads
 │   │   ├── audio/
@@ -139,6 +147,7 @@ openwhisper/
 │   ├── src/
 │   │   ├── App.tsx              # Router (react-router-dom v7)
 │   │   ├── components/          # UI components + shadcn/ui (ScenarioCards, ScenarioResult, ...)
+│   │   │   └── settings/        # Settings page section components (7 sub-components)
 │   │   ├── hooks/               # useWebSocket, useTranscription, useFileTranscription, ...
 │   │   ├── lib/                 # API client, Tauri bridge, utils
 │   │   └── pages/               # Transcription, FileUpload, Sessions, Settings, Overlay
