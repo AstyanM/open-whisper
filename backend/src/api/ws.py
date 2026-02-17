@@ -5,10 +5,8 @@ import base64
 import json
 import logging
 import os
-import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -18,7 +16,6 @@ from src.exceptions import (
     AudioDeviceError,
     DatabaseError,
     WhisperModelError,
-    VTSError,
 )
 from src.transcription.whisper_client import WhisperClient
 from src.storage.database import get_db
@@ -26,29 +23,14 @@ from src.storage.repository import SessionRepository
 from src.llm.client import is_llm_available, summarize_text
 from src.search.vector_store import index_session
 
-logger = logging.getLogger(__name__)
+from src.debug_log import debug_log as _debug_log
 
-# ── Debug: file-based logging (immune to stdout/stderr/logging issues) ──
-_DEBUG_LOG = Path(__file__).resolve().parent.parent.parent / "data" / "ws_debug.log"
-_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 
 def _debug(msg: str) -> None:
-    """Write debug message to a file AND stderr. File output is guaranteed."""
-    line = f"{datetime.now().strftime('%H:%M:%S.%f')[:-3]} {msg}\n"
-    try:
-        with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
-            f.write(line)
-            f.flush()
-            os.fsync(f.fileno())
-    except Exception:
-        pass
-    # Also try stderr
-    try:
-        sys.stderr.write(f"[WS] {line}")
-        sys.stderr.flush()
-    except Exception:
-        pass
+    """Convenience wrapper for debug_log with WS tag."""
+    _debug_log("WS", msg)
 
 
 # Module-level marker: if this appears in the log file, the correct code is loaded
@@ -103,6 +85,9 @@ async def websocket_transcribe(websocket: WebSocket):
 
             if msg.get("type") == "start":
                 mode = msg.get("mode", "transcription")
+                if mode not in ("transcription", "dictation"):
+                    await _send_ws_error(websocket, f"Invalid mode: {mode}", "invalid_mode")
+                    continue
                 language = msg.get("language")
                 _debug(f"[WS] Starting session: mode={mode}, language={language}")
                 await _handle_transcription_session(
@@ -132,10 +117,14 @@ async def _handle_transcription_session(
 ):
     """Orchestrate a single transcription session."""
     from src.main import config
+    from src.config import SUPPORTED_LANGUAGES
 
     _debug(f"[WS] _handle_transcription_session: mode={mode}, language_override={language_override}")
 
     language = language_override or config.language
+    if language not in SUPPORTED_LANGUAGES:
+        logger.warning("Unsupported language %r requested, falling back to config default", language)
+        language = config.language
 
     # Create DB session
     try:
@@ -619,7 +608,8 @@ async def websocket_mic_test(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("Mic-test client disconnected")
     except RuntimeError as e:
-        if "disconnect" in str(e).lower():
+        msg_lower = str(e).lower()
+        if "disconnect" in msg_lower or "not connected" in msg_lower:
             logger.info("Mic-test client disconnected")
         else:
             logger.error(f"Mic-test error: {e}", exc_info=True)
@@ -667,8 +657,10 @@ async def _handle_mic_test(websocket: WebSocket, device: str) -> None:
                     "type": "level",
                     "rms": round(rms, 4),
                 }))
-        except Exception:
-            pass  # stream ended
+        except WebSocketDisconnect:
+            pass  # client disconnected, expected
+        except Exception as e:
+            logger.warning("Mic test stream error: %s", e)
         finally:
             capture.stop()
 

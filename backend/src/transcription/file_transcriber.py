@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import AsyncIterator, NamedTuple
 
 from src.config import TranscriptionModelConfig
-from src.transcription.whisper_client import _get_or_load_model, _debug
+from src.transcription.whisper_client import _get_or_load_model, _debug, _model_lock
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ async def transcribe_file_streaming(
     loop = asyncio.get_running_loop()
 
     _debug(f"[FILE] Loading model for file transcription: {file_path.name}")
-    model = await loop.run_in_executor(None, _get_or_load_model, config)
+    async with _model_lock:
+        model = await loop.run_in_executor(None, _get_or_load_model, config)
 
     queue: asyncio.Queue[TranscriptionSegment | None] = asyncio.Queue()
     audio_duration_holder: list[float] = [0.0]

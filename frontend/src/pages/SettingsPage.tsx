@@ -225,7 +225,7 @@ export function SettingsPage() {
               <SelectContent>
                 <SelectItem value="default">Default</SelectItem>
                 {devices.map((d) => (
-                  <SelectItem key={d.index} value={d.name}>
+                  <SelectItem key={d.index} value={String(d.index)}>
                     {d.name}
                   </SelectItem>
                 ))}

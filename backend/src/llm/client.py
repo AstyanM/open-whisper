@@ -4,8 +4,8 @@ Works with any provider exposing /v1/chat/completions:
 Ollama (default), LM Studio, vLLM, OpenAI, etc.
 """
 
+import asyncio
 import logging
-from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 
 # ── Singleton state ──────────────────────────────────────────────────
 
-_client: Any = None  # AsyncOpenAI | None
+_client: AsyncOpenAI | None = None
 _config: LLMConfig | None = None
+_llm_lock = asyncio.Lock()
 
 # ── Prompts ──────────────────────────────────────────────────────────
 
@@ -113,17 +114,21 @@ def get_llm_config() -> LLMConfig | None:
 
 async def _chat_completion(system_prompt: str, user_prompt: str) -> str:
     """Send a chat completion request. Raises LLMError on failure."""
-    if _client is None or _config is None:
+    # Snapshot references under lock to avoid tearing during config reload
+    async with _llm_lock:
+        client = _client
+        config = _config
+    if client is None or config is None:
         raise LLMError("LLM client not initialized or disabled")
     try:
-        response = await _client.chat.completions.create(
-            model=_config.model,
+        response = await client.chat.completions.create(
+            model=config.model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=_config.temperature,
-            max_tokens=_config.max_tokens,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
         )
         content = response.choices[0].message.content
         return content.strip() if content else ""

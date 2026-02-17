@@ -14,7 +14,6 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -42,27 +41,14 @@ from faster_whisper import WhisperModel
 from src.config import TranscriptionModelConfig
 from src.exceptions import WhisperModelError
 
-logger = logging.getLogger(__name__)
+from src.debug_log import debug_log as _debug_log
 
-# ── Debug: file-based logging (immune to stdout/stderr/logging issues) ──
-_DEBUG_LOG = Path(__file__).resolve().parent.parent.parent / "data" / "ws_debug.log"
+logger = logging.getLogger(__name__)
 
 
 def _debug(msg: str) -> None:
-    """Write debug message to a file AND stderr. File output is guaranteed."""
-    line = f"{datetime.now().strftime('%H:%M:%S.%f')[:-3]} [WHISPER] {msg}\n"
-    try:
-        with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
-            f.write(line)
-            f.flush()
-            os.fsync(f.fileno())
-    except Exception:
-        pass
-    try:
-        sys.stderr.write(line)
-        sys.stderr.flush()
-    except Exception:
-        pass
+    """Convenience wrapper for debug_log with WHISPER tag."""
+    _debug_log("WHISPER", msg)
 
 
 # Module-level marker
@@ -72,6 +58,7 @@ _debug(f"===== whisper_client.py MODULE LOADED (pid={os.getpid()}) =====")
 _model: WhisperModel | None = None
 _model_config_key: str | None = None
 _model_actual_device: str | None = None
+_model_lock = asyncio.Lock()
 
 
 def get_model_info() -> dict[str, str | None]:
@@ -215,9 +202,10 @@ class WhisperSession:
         logger.info("[Session] Loading model...")
         loop = asyncio.get_running_loop()
         try:
-            self._model = await loop.run_in_executor(
-                None, _get_or_load_model, self._config
-            )
+            async with _model_lock:
+                self._model = await loop.run_in_executor(
+                    None, _get_or_load_model, self._config
+                )
         except WhisperModelError:
             raise
         except Exception as e:

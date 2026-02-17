@@ -207,9 +207,10 @@ async def update_config(request: Request):
 
     # Re-initialize LLM client if config changed
     if any(p.startswith("models.llm") for p in changed):
-        from src.llm.client import init_llm_client, close_llm_client
-        close_llm_client()
-        init_llm_client(new_config.models.llm)
+        from src.llm.client import init_llm_client, close_llm_client, _llm_lock
+        async with _llm_lock:
+            close_llm_client()
+            init_llm_client(new_config.models.llm)
 
     return {"status": "ok", "applied": applied, "restart_required": restart_required}
 
@@ -250,15 +251,29 @@ def _strip_accents(text: str) -> str:
 
 # Stopwords stripped from query for exact-match keyword checking (not for cosine similarity).
 _STOPWORDS_PATH = Path(__file__).resolve().parent.parent / "search" / "stopwords.json"
-with open(_STOPWORDS_PATH, encoding="utf-8") as _f:
-    _STOPWORDS: set[str] = {w for words in json.load(_f).values() for w in words}
+_STOPWORDS: set[str] = set()
+
+
+def _get_stopwords() -> set[str]:
+    """Lazy-load stopwords on first use, returning empty set if file missing."""
+    global _STOPWORDS
+    if _STOPWORDS:
+        return _STOPWORDS
+    try:
+        with open(_STOPWORDS_PATH, encoding="utf-8") as f:
+            _STOPWORDS = {w for words in json.load(f).values() for w in words}
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logger.warning("Could not load stopwords from %s: %s", _STOPWORDS_PATH, e)
+        _STOPWORDS = set()
+    return _STOPWORDS
 
 
 def _is_exact_match(query: str, document: str) -> bool:
     """Check if ALL non-stopword query words appear in the document (case + accent insensitive)."""
+    stopwords = _get_stopwords()
     norm_doc = _strip_accents(document).lower()
     words = _strip_accents(query).lower().split()
-    content_words = [w for w in words if w not in _STOPWORDS]
+    content_words = [w for w in words if w not in stopwords]
     return all(w in norm_doc for w in content_words) if content_words else False
 
 
@@ -517,10 +532,23 @@ async def upload_file_for_transcription(
     for real-time transcription progress.
     """
     from src.main import config as app_config
+    from src.config import SUPPORTED_LANGUAGES
+
+    # Validate language
+    if language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language: {language}. Supported: {', '.join(SUPPORTED_LANGUAGES)}",
+        )
+
     max_size_mb = app_config.max_upload_size_mb if app_config else 500
     max_size = max_size_mb * 1024 * 1024
 
-    filename = file.filename or "unknown"
+    raw_filename = file.filename or "unknown"
+    # Sanitize: strip directory components to prevent path traversal
+    filename = Path(raw_filename).name
+    if not filename:
+        filename = "unknown"
     ext = Path(filename).suffix.lower()
     if ext not in ACCEPTED_AUDIO_EXTENSIONS:
         raise HTTPException(
@@ -528,15 +556,29 @@ async def upload_file_for_transcription(
             detail=f"Unsupported file format: {ext}. Accepted: {', '.join(sorted(ACCEPTED_AUDIO_EXTENSIONS))}",
         )
 
-    content = await file.read()
-    if len(content) > max_size:
-        raise HTTPException(status_code=413, detail=f"File too large (max {max_size_mb} MB)")
-
-    # Save to temp directory
+    # Stream upload to temp file to avoid holding entire file in memory
     temp_dir = Path(tempfile.gettempdir()) / "openwhisper_uploads"
     temp_dir.mkdir(exist_ok=True)
     temp_path = temp_dir / f"{int(datetime.now().timestamp())}_{filename}"
-    temp_path.write_bytes(content)
+    total_size = 0
+    _CHUNK_SIZE = 64 * 1024  # 64 KB
+    try:
+        with open(temp_path, "wb") as f:
+            while True:
+                chunk = await file.read(_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > max_size:
+                    f.close()
+                    temp_path.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413, detail=f"File too large (max {max_size_mb} MB)")
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {exc}")
 
     # Create DB session
     repo = _get_repo()
@@ -565,6 +607,6 @@ async def delete_session(session_id: int):
         raise HTTPException(status_code=404, detail="Session not found")
     try:
         await delete_session_embedding(session_id)
-    except Exception:
-        pass  # Non-fatal
+    except Exception as e:
+        logger.warning("Failed to delete ChromaDB embedding for session %d: %s", session_id, e)
     return {"deleted": True, "session_id": session_id}

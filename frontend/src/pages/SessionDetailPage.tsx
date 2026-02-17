@@ -40,7 +40,13 @@ export function SessionDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    fetchSession(parseInt(id))
+    const numId = parseInt(id, 10);
+    if (Number.isNaN(numId) || numId <= 0) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
+    fetchSession(numId)
       .then(setData)
       .catch((e) => {
         const msg = e.message ?? "";
@@ -88,9 +94,13 @@ export function SessionDetailPage() {
 
   async function handleCopy() {
     if (!data) return;
-    await navigator.clipboard.writeText(data.full_text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(data.full_text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy to clipboard");
+    }
   }
 
   if (loading) {

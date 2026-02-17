@@ -5,17 +5,21 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import chromadb
 
 from src.search.embedding import MultilingualEmbeddingFunction
 
+if TYPE_CHECKING:
+    from chromadb.api.models.Collection import Collection
+
 logger = logging.getLogger(__name__)
 
+# chromadb.PersistentClient is a function at runtime (not a class) — use Any for client
 _client: Any = None
-_collection: Any = None
-_embedding_fn: Any = None
+_collection: "Collection | None" = None
+_embedding_fn: MultilingualEmbeddingFunction | None = None
 
 
 async def init_vector_store(
@@ -29,7 +33,7 @@ async def init_vector_store(
     """
     global _client, _collection, _embedding_fn
     chroma_dir = str(Path(db_path).parent / "chroma")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # Load embedding model (may download on first run)
     _embedding_fn = await loop.run_in_executor(
@@ -122,7 +126,7 @@ async def index_session(
         return
 
     collection = get_collection()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(
         None,
         lambda: collection.upsert(
@@ -143,14 +147,14 @@ async def index_session(
 async def delete_session_embedding(session_id: int) -> None:
     """Remove a session from the ChromaDB index."""
     collection = get_collection()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         await loop.run_in_executor(
             None,
             lambda: collection.delete(ids=[str(session_id)]),
         )
-    except Exception:
-        logger.warning(f"Failed to delete session {session_id} from ChromaDB")
+    except Exception as e:
+        logger.warning("Failed to delete session %d from ChromaDB: %s", session_id, e)
 
 
 async def search_sessions(
@@ -165,7 +169,7 @@ async def search_sessions(
     Results with distance > distance_threshold are filtered out.
     """
     collection = get_collection()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     kwargs: dict = {
         "query_texts": [query],

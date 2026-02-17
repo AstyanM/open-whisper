@@ -38,9 +38,13 @@ export function TranscriptionView({
 
   async function handleCopy() {
     if (!text) return;
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail (permissions, non-secure context)
+    }
   }
 
   const isRecording = state === "recording";

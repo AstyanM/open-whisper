@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { WS_URL } from "@/lib/constants";
 import { uploadFileForTranscription } from "@/lib/api";
 
@@ -164,6 +164,14 @@ export function useFileTranscription(): UseFileTranscriptionReturn {
     setAudioDurationS(null);
     setState("idle");
   }, [closeWs]);
+
+  // Clean up WebSocket on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      closeWs();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     state,

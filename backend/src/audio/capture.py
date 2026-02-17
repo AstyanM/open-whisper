@@ -38,7 +38,13 @@ class AudioCapture:
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk_duration_ms = chunk_duration_ms
-        self.device = device if device != "default" else None
+        # Resolve device: "default"/None → None, numeric string → int index, else pass as-is
+        if device is None or device == "default":
+            self.device = None
+        elif isinstance(device, str) and device.isdigit():
+            self.device = int(device)
+        else:
+            self.device = device
         self.chunk_samples = int(sample_rate * chunk_duration_ms / 1000)
         self._queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._running = False
@@ -120,15 +126,23 @@ class AudioCapture:
 
     @staticmethod
     def list_devices() -> list[dict]:
-        """List available audio input devices."""
+        """List available audio input devices (deduplicated by name)."""
         devices = sd.query_devices()
-        result = []
+        seen: dict[str, dict] = {}
         for i, dev in enumerate(devices):
             if dev["max_input_channels"] > 0:
-                result.append({
+                name = dev["name"]
+                entry = {
                     "index": i,
-                    "name": dev["name"],
+                    "name": name,
                     "channels": dev["max_input_channels"],
                     "sample_rate": dev["default_samplerate"],
-                })
-        return result
+                }
+                if name not in seen:
+                    seen[name] = entry
+                else:
+                    # Prefer higher-index duplicates (WASAPI typically listed after MME/DirectSound)
+                    hostapi = sd.query_hostapis(dev["hostapi"])
+                    if "WASAPI" in hostapi.get("name", ""):
+                        seen[name] = entry
+        return list(seen.values())
