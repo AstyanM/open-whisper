@@ -51,32 +51,32 @@ All modes use a local faster-whisper engine running directly in the Python backe
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                  Tauri v2 (Rust)                  │
-│                                                   │
-│  ┌──────────────┐  ┌─────────┐  ┌────────────┐  │
-│  │  React 19    │  │ Overlay │  │ System Tray│  │
-│  │  + Vite      │  │ Window  │  │            │  │
-│  └──────┬───────┘  └────┬────┘  └─────┬──────┘  │
+│                  Tauri v2 (Rust)                 │
+│                                                  │
+│  ┌──────────────┐  ┌─────────┐  ┌────────────┐   │
+│  │  React 19    │  │ Overlay │  │ System Tray│   │
+│  │  + Vite      │  │ Window  │  │            │   │
+│  └──────┬───────┘  └────┬────┘  └─────┬──────┘   │
 │         └────────┬──────┘─────────────┘          │
-│          Global shortcuts · Text injection        │
-│          (enigo / SendInput)                      │
+│          Global shortcuts · Text injection       │
+│          (enigo / SendInput)                     │
 └──────────────────┬───────────────────────────────┘
                    │ HTTP + WebSocket (localhost:8001)
-         ┌─────────┴─────────┐
-         │  Python Backend   │
-         │    (FastAPI)      │
-         │                   │
-         │  · faster-whisper │
-         │    (Whisper STT)  │
-         │  · Audio capture  │
-         │    (sounddevice)  │
-         │  · File transcr.  │
-         │  · LLM processing │
-         │    (OpenAI-compat)│
-         │  · SQLite storage │
-         │  · ChromaDB search│
-         │  · Config manager │
-         └───────────────────┘
+         ┌─────────┴──────────┐
+         │  Python Backend    │
+         │    (FastAPI)       │
+         │                    │
+         │  · faster-whisper  │
+         │    (Whisper STT)   │
+         │  · Audio capture   │
+         │    (sounddevice)   │
+         │  · File transcr.   │
+         │  · LLM processing  │
+         │    (OpenAI-compat) │
+         │  · SQLite storage  │
+         │  · ChromaDB search │
+         │  · Config manager  │
+         └────────────────────┘
 ```
 
 **No external server required** — faster-whisper runs inside the Python backend process. GPU (CUDA) is optional: it accelerates transcription but the app works on CPU too.
@@ -187,9 +187,9 @@ openwhisper/
 ### Quick setup (recommended)
 
 ```bash
-git clone https://github.com/AstyanM/openwhisper.git
-cd openwhisper
-setup.bat
+git clone https://github.com/AstyanM/open-whisper.git
+cd open-whisper
+.\setup.bat
 ```
 
 The setup script automatically:
@@ -205,8 +205,8 @@ If you prefer to set up manually or are troubleshooting:
 
 ```bash
 # 1. Clone
-git clone https://github.com/AstyanM/openwhisper.git
-cd openwhisper
+git clone https://github.com/AstyanM/open-whisper.git
+cd open-whisper
 
 # 2. Backend
 cd backend
