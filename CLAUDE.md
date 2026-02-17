@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Local real-time voice transcription app powered by **faster-whisper** (OpenAI Whisper via CTranslate2). Zero cloud dependency — all processing happens on-device. Two modes: **dictation** (inject text at cursor) and **transcription** (dedicated window with timestamped history).
+Local real-time voice transcription app powered by **faster-whisper** (OpenAI Whisper via CTranslate2). Zero cloud dependency — all processing happens on-device. Three modes: **dictation** (inject text at cursor), **transcription** (dedicated window with timestamped history), and **file** (upload audio files for offline transcription). Optional **LLM post-processing** (summarize, to-do list, reformulate) via any OpenAI-compatible API (Ollama, LM Studio, etc.).
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Python Backend (FastAPI + faster-whisper)
 
 - **Frontend** (`frontend/`): React 19 + Vite + Tailwind CSS v4 + shadcn/ui. Served by Tauri webview.
 - **Tauri** (`src-tauri/`): Rust shell — global shortcuts, text injection (enigo), overlay window, system tray, sidecar process management.
-- **Backend** (`backend/`): Python 3.13 + FastAPI — audio capture (sounddevice), faster-whisper transcription, WebSocket streaming, SQLite storage, ChromaDB semantic search, config loading.
+- **Backend** (`backend/`): Python 3.13 + FastAPI — audio capture (sounddevice), faster-whisper transcription, file transcription, WebSocket streaming, SQLite storage, ChromaDB semantic search, LLM post-processing (OpenAI-compatible), config loading.
 - **Config**: `config.yaml` at project root, validated by Pydantic in `backend/src/config.py`.
 
 ## Tech Stack
@@ -31,6 +31,8 @@ Python Backend (FastAPI + faster-whisper)
 | Transcription | faster-whisper (CTranslate2) | Whisper models (tiny → large-v3 / large-v3-turbo), CUDA or CPU |
 | Storage | SQLite via aiosqlite | Sessions + timestamped segments |
 | Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, local CPU |
+| LLM processing | openai SDK (AsyncOpenAI) | OpenAI-compatible API (Ollama, LM Studio, etc.) |
+| File upload | python-multipart | WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus |
 | Text injection | enigo 0.6 + arboard 3 (clipboard fallback) | Win32 SendInput |
 | Package mgmt | npm (frontend), uv (backend), cargo (Rust) | |
 
@@ -95,18 +97,22 @@ openwhisper/
 │       ├── config.py            # Pydantic config loader (config.yaml)
 │       ├── exceptions.py        # Custom exception classes
 │       ├── api/
-│       │   ├── routes.py        # REST endpoints (health, sessions, config, search)
-│       │   └── ws.py            # WebSocket endpoints (audio stream)
+│       │   ├── routes.py        # REST endpoints (health, sessions, config, search, LLM, file upload)
+│       │   ├── ws.py            # WebSocket endpoints (audio stream, file transcription)
+│       │   └── _file_transcription_state.py  # Pending file upload state registry (REST→WS bridge)
 │       ├── audio/
 │       │   └── capture.py       # Microphone capture (sounddevice)
+│       ├── llm/
+│       │   └── client.py        # LLM client (OpenAI-compatible: summarize, rewrite, scenarios)
 │       ├── search/
 │       │   ├── vector_store.py  # ChromaDB singleton (index, search, delete)
 │       │   └── backfill.py      # Backfill existing sessions into ChromaDB
 │       ├── storage/
-│       │   ├── database.py      # SQLite init + migrations
+│       │   ├── database.py      # SQLite init + migrations (V0→V1)
 │       │   └── repository.py    # CRUD for sessions & segments
 │       └── transcription/
-│           └── whisper_client.py  # faster-whisper integration (WhisperClient + WhisperSession)
+│           ├── whisper_client.py   # faster-whisper integration (WhisperClient + WhisperSession)
+│           └── file_transcriber.py # File-based audio transcription (streaming segments)
 │
 ├── frontend/                    # React + Vite
 │   ├── package.json
@@ -122,6 +128,8 @@ openwhisper/
 │       │   ├── BackendStatusBanner.tsx  # Backend health check banner
 │       │   ├── DeleteSessionDialog.tsx  # AlertDialog for session deletion
 │       │   ├── SessionSearchBar.tsx     # Search + filter bar (semantic + metadata)
+│       │   ├── ScenarioCards.tsx        # LLM scenario processing buttons (summarize, todo, reformulate)
+│       │   ├── ScenarioResult.tsx       # LLM scenario result display (copy, dismiss, markdown)
 │       │   ├── MicTest.tsx              # Microphone test component
 │       │   ├── LogoMark.tsx             # Inline SVG logo component
 │       │   ├── ThemeProvider.tsx         # next-themes provider
@@ -131,16 +139,18 @@ openwhisper/
 │       │   ├── useWebSocket.ts
 │       │   ├── useTranscription.ts
 │       │   ├── useDictation.ts
+│       │   ├── useFileTranscription.ts  # File upload transcription workflow hook
 │       │   ├── useSettings.ts
 │       │   ├── useBackendHealth.ts
 │       │   └── useTauriShortcuts.ts
 │       ├── lib/
-│       │   ├── api.ts           # REST client to backend (sessions, search, config)
+│       │   ├── api.ts           # REST client to backend (sessions, search, config, LLM, file upload)
 │       │   ├── tauri.ts         # Tauri IPC bridge
 │       │   ├── constants.ts
 │       │   └── utils.ts         # cn() helper (clsx + tailwind-merge)
 │       └── pages/
 │           ├── TranscriptionPage.tsx
+│           ├── FileUploadPage.tsx    # Audio file upload + transcription page
 │           ├── SessionListPage.tsx   # Session list with search/filter bar
 │           ├── SessionDetailPage.tsx
 │           ├── SettingsPage.tsx
@@ -165,12 +175,14 @@ openwhisper/
 - **Language**: All code, comments, commit messages, and documentation in **English**.
 - **Frontend imports**: Use `@/` path alias (e.g., `import { cn } from "@/lib/utils"`).
 - **UI components**: Use shadcn/ui. Primitives live in `frontend/src/components/ui/`.
-- **Backend structure**: Domain modules (`audio/`, `transcription/`, `storage/`, `search/`, `api/`), each with `__init__.py`.
+- **Backend structure**: Domain modules (`audio/`, `transcription/`, `storage/`, `search/`, `llm/`, `api/`), each with `__init__.py`.
 - **Config access**: Always through Pydantic models in `backend/src/config.py`, never raw YAML parsing.
 - **Tauri v2**: `app.title` does NOT exist — window title goes in `app.windows[].title` only.
 - **Tauri windows**: Two windows defined — `main` (900x700, resizable) and `overlay` (100x36, transparent, always-on-top, click-through).
 - **Global shortcuts**: `Ctrl+Shift+D` (dictation), `Ctrl+Shift+T` (transcription).
 - **WebSocket-first**: Audio streaming and transcription use WebSocket, not REST.
+- **Session modes**: `'dictation'`, `'transcription'`, `'file'` (audio file upload).
+- **Frontend routes**: `/` (transcription), `/sessions` (list), `/sessions/:id` (detail), `/upload` (file upload), `/settings`, `/overlay`.
 
 ## Build Environment (Windows)
 
@@ -198,6 +210,44 @@ Prerequisites:
 - **Architecture**: `WhisperClient` manages model lifecycle, `WhisperSession` handles per-session audio buffering and transcription streaming
 - **Model download**: Automatic on first use, cached in `~/.cache/huggingface/`
 
+## LLM Post-Processing
+
+Optional integration with any OpenAI-compatible LLM API for text processing after transcription.
+
+- **Client**: `backend/src/llm/client.py` — singleton `AsyncOpenAI` client, init/close lifecycle
+- **Scenarios**: `summarize` (2-4 sentence summary), `todo_list` (extract actionable items as markdown checkboxes), `reformulate` (clean up filler words, grammar, transcription artifacts)
+- **API endpoints**:
+  - `POST /api/sessions/{id}/summarize` — generate/update session summary
+  - `POST /api/llm/process` — process text with a scenario (`{"text", "scenario", "language"}`)
+  - `POST /api/llm/rewrite` — rewrite text with custom instruction (`{"text", "instruction"}`)
+- **Auto-summarize**: When `models.llm.auto_summarize` is true, sessions are summarized automatically on end
+- **Config** (`models.llm` in `config.yaml`):
+  - `enabled`: bool (default `false`) — master toggle
+  - `api_url`: str (default `http://localhost:11434/v1`) — OpenAI-compatible endpoint (Ollama, LM Studio, etc.)
+  - `api_key`: str (default `ollama`)
+  - `model`: str (default `mistral:7b`)
+  - `temperature`: float (0.0–2.0, default `0.3`)
+  - `max_tokens`: int (64–4096, default `512`)
+  - `auto_summarize`: bool (default `true`)
+- **Frontend**: `ScenarioCards` (3 color-coded buttons) + `ScenarioResult` (display with copy/dismiss), shown in TranscriptionPage and FileUploadPage
+- **Languages**: 13 supported (fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko) — system prompts adapt to target language
+- **Graceful degradation**: All LLM features disabled if `enabled: false` or API unavailable
+
+## File Transcription
+
+Upload audio files for offline transcription (instead of live microphone capture).
+
+- **Supported formats**: WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus
+- **Max upload size**: Configurable via `max_upload_size_mb` (50–1024 MB, default `500`)
+- **Three-step flow**:
+  1. `POST /api/transcribe/file` — upload file, create DB session (mode=`file`), save temp file
+  2. State registry (`_file_transcription_state.py`) bridges REST upload → WebSocket connection
+  3. `WS /ws/transcribe-file/{session_id}` — stream transcription progress + segments, cleanup temp file
+- **WebSocket messages**: `status`, `file_info` (audio duration), `transcript_delta`, `progress` (percent), `session_ended`, `error`
+- **Frontend**: `/upload` route → `FileUploadPage` with drag-and-drop, progress bar, language selector, ScenarioCards integration
+- **Hook**: `useFileTranscription` — manages upload workflow states (idle → uploading → transcribing → completed)
+- **Backend**: `file_transcriber.py` — async generator using faster-whisper's native ffmpeg decoding, quality filtering (compression_ratio, avg_logprob thresholds)
+
 ## Current State
 
 - **Phase 1** (Foundations): Completed — Tauri + React + FastAPI scaffold, config loading, audio capture, overlay, system tray, global shortcuts, dictation mode.
@@ -208,13 +258,17 @@ Prerequisites:
 - **Phase 4.3** (Session UX + Search): Completed — AlertDialog delete, optimistic delete with animation, toast notifications, ChromaDB semantic search, metadata filters (language, mode, date, duration), search endpoint, auto-backfill.
 - **Phase 4.4** (UI redesign): Completed — Renamed to OpenWhisper, warm stone + amber palette, Plus Jakarta Sans + JetBrains Mono fonts, dark/light theme toggle, new logo.
 - **Phase 4.4b** (Model migration): Completed — Replaced vLLM/Voxtral with faster-whisper. No external server needed.
+- **Phase 4.5** (LLM post-processing): Completed — OpenAI-compatible LLM integration (summarize, to-do list, reformulate), ScenarioCards/ScenarioResult UI, auto-summarize on session end.
+- **Phase 4.6** (File transcription): Completed — Audio file upload, drag-and-drop UI, streaming progress, file_transcriber backend, WebSocket progress channel.
 - See `prd.md` for full roadmap and feature backlog.
 
 ## Data Model (SQLite)
 
 Two main tables:
-- `sessions`: id, mode ('dictation'|'transcription'), language, started_at, ended_at, duration_s, summary (V2)
+- `sessions`: id, mode ('dictation'|'transcription'|'file'), language, started_at, ended_at, duration_s, summary, filename (V1 migration)
 - `segments`: id, session_id (FK), text, start_ms, end_ms, confidence
+
+Migrations tracked via `PRAGMA user_version` (current: V1 — added `filename` column).
 
 ## Semantic Search (ChromaDB)
 

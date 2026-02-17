@@ -7,7 +7,8 @@
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 Local, real-time voice transcription powered by **faster-whisper** (OpenAI Whisper).
-Two modes — **dictation** (inject text at cursor) and **transcription** (dedicated window with timestamped history).
+Three modes — **dictation** (inject text at cursor), **transcription** (dedicated window with timestamped history), and **file upload** (offline audio transcription).
+Optional **LLM post-processing** (summarize, to-do list, reformulate) via any OpenAI-compatible API.
 Zero cloud dependency — all processing happens on-device.
 
 ---
@@ -21,8 +22,9 @@ OpenWhisper runs entirely on your machine: your audio never leaves your hardware
 |------|-------------|----------|
 | **Dictation** | `Ctrl+Shift+D` activates mic, transcribed text is injected at cursor in any app | Quick emails, notes, messages |
 | **Transcription** | `Ctrl+Shift+T` opens a dedicated window with real-time timestamps and session history | Meetings, calls, long-form notes |
+| **File upload** | Drag-and-drop audio files (WAV, MP3, FLAC, OGG, M4A, WebM, etc.) for offline transcription | Podcast episodes, recorded interviews, voice memos |
 
-Both modes stream audio to a local faster-whisper engine running directly in the Python backend. With CUDA, the `large-v3-turbo` model uses ~3 GB VRAM; the `small` model runs comfortably on CPU.
+All modes use a local faster-whisper engine running directly in the Python backend. With CUDA, the `large-v3-turbo` model uses ~3 GB VRAM; the `small` model runs comfortably on CPU.
 
 ---
 
@@ -31,10 +33,13 @@ Both modes stream audio to a local faster-whisper engine running directly in the
 - **Real-time streaming transcription** — audio chunks streamed via WebSocket, transcribed with faster-whisper
 - **Dictation mode** — global shortcut injects text at cursor via Win32 SendInput
 - **Transcription mode** — timestamped segments, session history, SQLite storage
+- **File upload transcription** — drag-and-drop audio files (WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus) with streaming progress
+- **LLM post-processing** (optional) — summarize, extract to-do lists, or reformulate transcriptions via any OpenAI-compatible API (Ollama, LM Studio, etc.)
+- **Auto-summarize** — sessions automatically summarized by LLM on completion (configurable)
 - **Semantic search** — ChromaDB + all-MiniLM-L6-v2 embeddings for searching past sessions
 - **Always-on-top overlay** — transparent, click-through indicator (mic status, language, mode)
 - **System tray** — quick access menu, language switching
-- **Multiple Whisper model sizes** — tiny, base, small, medium, large-v3-turbo
+- **Multiple Whisper model sizes** — tiny, base, small, medium, large-v3, large-v3-turbo
 - **VAD filtering** — skip silent regions for faster processing
 - **13 languages** — fr, en, es, pt, hi, de, nl, it, ar, ru, zh, ja, ko
 - **Dark / light theme** — warm stone + amber palette, automatic or manual toggle
@@ -65,6 +70,9 @@ Both modes stream audio to a local faster-whisper engine running directly in the
          │    (Whisper STT)  │
          │  · Audio capture  │
          │    (sounddevice)  │
+         │  · File transcr.  │
+         │  · LLM processing │
+         │    (OpenAI-compat)│
          │  · SQLite storage │
          │  · ChromaDB search│
          │  · Config manager │
@@ -86,6 +94,8 @@ Both modes stream audio to a local faster-whisper engine running directly in the
 | Transcription | faster-whisper (CTranslate2) | Whisper models (tiny → large-v3-turbo), CUDA or CPU |
 | Storage | SQLite (aiosqlite) | Sessions + timestamped segments |
 | Semantic search | ChromaDB + all-MiniLM-L6-v2 | 384-dim embeddings, CPU inference |
+| LLM processing | openai SDK (AsyncOpenAI) | Any OpenAI-compatible API (Ollama, LM Studio, etc.) |
+| File upload | python-multipart | WAV, MP3, FLAC, OGG, M4A, WebM, WMA, AAC, Opus |
 | Text injection | enigo 0.6 + arboard 3 | Win32 SendInput, clipboard fallback |
 
 ---
@@ -105,27 +115,31 @@ openwhisper/
 │   │   ├── config.py            # Pydantic config loader
 │   │   ├── exceptions.py        # Custom exception classes
 │   │   ├── api/
-│   │   │   ├── routes.py        # REST endpoints
-│   │   │   └── ws.py            # WebSocket (audio streaming)
+│   │   │   ├── routes.py        # REST endpoints (sessions, config, LLM, file upload)
+│   │   │   ├── ws.py            # WebSocket (audio + file transcription streaming)
+│   │   │   └── _file_transcription_state.py  # REST→WS state bridge for file uploads
 │   │   ├── audio/
 │   │   │   └── capture.py       # Microphone capture
+│   │   ├── llm/
+│   │   │   └── client.py        # LLM client (OpenAI-compatible: summarize, rewrite, scenarios)
 │   │   ├── search/
 │   │   │   ├── vector_store.py  # ChromaDB integration
 │   │   │   └── backfill.py      # Auto-index existing sessions
 │   │   ├── storage/
-│   │   │   ├── database.py      # SQLite init + migrations
+│   │   │   ├── database.py      # SQLite init + migrations (V0→V1)
 │   │   │   └── repository.py    # CRUD for sessions & segments
 │   │   └── transcription/
-│   │       └── whisper_client.py  # faster-whisper integration
+│   │       ├── whisper_client.py   # faster-whisper integration
+│   │       └── file_transcriber.py # File-based audio transcription
 │   └── tests/
 │
 ├── frontend/                    # React + Vite + Tailwind CSS
 │   ├── src/
 │   │   ├── App.tsx              # Router (react-router-dom v7)
-│   │   ├── components/          # UI components + shadcn/ui
-│   │   ├── hooks/               # useWebSocket, useTranscription, ...
+│   │   ├── components/          # UI components + shadcn/ui (ScenarioCards, ScenarioResult, ...)
+│   │   ├── hooks/               # useWebSocket, useTranscription, useFileTranscription, ...
 │   │   ├── lib/                 # API client, Tauri bridge, utils
-│   │   └── pages/               # Transcription, Sessions, Settings, Overlay
+│   │   └── pages/               # Transcription, FileUpload, Sessions, Settings, Overlay
 │   └── public/
 │       └── icon.svg             # App icon
 │
@@ -231,12 +245,17 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `language` | `"fr"` | Transcription language (13 supported) |
-| `models.transcription.model_size` | `"small"` | Whisper model: `tiny`, `base`, `small`, `medium`, `large-v3-turbo` |
+| `max_upload_size_mb` | `500` | Max file upload size in MB (50–1024) |
+| `models.transcription.model_size` | `"auto"` | Whisper model: `tiny`, `base`, `small`, `medium`, `large-v3`, `large-v3-turbo` |
 | `models.transcription.device` | `"auto"` | Inference device: `auto`, `cuda`, `cpu` |
 | `models.transcription.compute_type` | `"auto"` | Precision: `auto`, `float16`, `int8`, `int8_float16` |
 | `models.transcription.beam_size` | `5` | 1 = greedy (fast), 5 = beam search (accurate) |
 | `models.transcription.vad_filter` | `true` | Skip silent regions (recommended) |
-| `models.transcription.buffer_duration_s` | `3.0` | Seconds of audio to buffer before transcribing (1–10) |
+| `models.transcription.buffer_duration_s` | `10.0` | Seconds of audio to buffer before transcribing (1–30) |
+| `models.llm.enabled` | `false` | Enable LLM post-processing features |
+| `models.llm.api_url` | `"http://localhost:11434/v1"` | OpenAI-compatible API endpoint |
+| `models.llm.model` | `"mistral:7b"` | LLM model name |
+| `models.llm.auto_summarize` | `true` | Auto-summarize sessions on completion |
 | `audio.device` | `"default"` | Microphone input device name or index |
 | `audio.chunk_duration_ms` | `80` | Audio chunk size in ms |
 | `overlay.enabled` | `true` | Show overlay window |
@@ -244,6 +263,30 @@ All settings live in `config.yaml` at the project root (copy from `config.exampl
 | `backend.port` | `8001` | Backend API port |
 
 Most settings apply immediately via hot-reload. Changes to model or port settings require a restart.
+
+### LLM Post-Processing (optional)
+
+OpenWhisper can use any OpenAI-compatible API for post-processing transcriptions. Three scenarios are available:
+
+| Scenario | Description |
+|----------|-------------|
+| **Summarize** | Generate a 2-4 sentence summary of key points |
+| **To-do list** | Extract actionable items as markdown checkboxes |
+| **Reformulate** | Clean up filler words, grammar, and transcription artifacts |
+
+Example setup with [Ollama](https://ollama.ai):
+
+```bash
+# Install and pull a model
+ollama pull mistral:7b
+
+# In config.yaml
+models:
+  llm:
+    enabled: true
+    api_url: "http://localhost:11434/v1"
+    model: "mistral:7b"
+```
 
 ### Supported languages
 
@@ -256,12 +299,13 @@ Most settings apply immediately via hot-reload. Changes to model or port setting
 ```sql
 sessions
 ├── id            INTEGER PRIMARY KEY
-├── mode          TEXT        -- 'dictation' | 'transcription'
+├── mode          TEXT        -- 'dictation' | 'transcription' | 'file'
 ├── language      TEXT        -- ISO code (fr, en, ...)
 ├── started_at    DATETIME
 ├── ended_at      DATETIME
 ├── duration_s    REAL
-└── summary       TEXT        -- V2: LLM-generated summary
+├── summary       TEXT        -- LLM-generated summary
+└── filename      TEXT        -- Original filename (file uploads only, V1 migration)
 
 segments
 ├── id            INTEGER PRIMARY KEY
@@ -286,8 +330,10 @@ Semantic search is powered by **ChromaDB** (stored in `./data/chroma/`), which a
 - [x] **Phase 4.3** — Session UX + search (ChromaDB, semantic search, filters, toasts)
 - [x] **Phase 4.4** — UI redesign (warm stone + amber palette, dark/light theme, new logo)
 - [x] **Phase 4.4b** — Switch from vLLM/Voxtral to faster-whisper (no external server needed)
-- [ ] **Phase 4.5** — Packaging & release (setup script, installer, GitHub release)
-- [ ] **Phase 5** — V2 features (auto-summary, export, speaker diarization, voice commands)
+- [x] **Phase 4.5** — LLM post-processing (summarize, to-do list, reformulate via OpenAI-compatible API)
+- [x] **Phase 4.6** — File transcription (audio file upload, drag-and-drop, streaming progress)
+- [ ] **Phase 4.7** — Packaging & release (setup script, installer, GitHub release)
+- [ ] **Phase 5** — V2 features (export, speaker diarization, voice commands)
 
 ---
 
