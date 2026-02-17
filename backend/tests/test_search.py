@@ -566,14 +566,14 @@ class TestExactMatchHelpers:
     """Tests for the exact match and stopword logic in routes."""
 
     def test_strip_accents(self):
-        from src.api.routes import _strip_accents
+        from src.api.routes.search import _strip_accents
         assert _strip_accents("médecine") == "medecine"
         assert _strip_accents("français") == "francais"
         assert _strip_accents("hello") == "hello"
         assert _strip_accents("über") == "uber"
 
     def test_is_exact_match_basic(self):
-        from src.api.routes import _is_exact_match
+        from src.api.routes.search import _is_exact_match
         doc = "Discussion sur les traitements médicaux et la médecine"
         assert _is_exact_match("médecine", doc) is True
         assert _is_exact_match("medecine", doc) is True  # Accent insensitive
@@ -581,7 +581,7 @@ class TestExactMatchHelpers:
         assert _is_exact_match("astronomie", doc) is False
 
     def test_is_exact_match_stopwords_ignored(self):
-        from src.api.routes import _is_exact_match
+        from src.api.routes.search import _is_exact_match
         doc = "Discussion sur les traitements médicaux et la médecine"
         # "de la" are stopwords, only "médecine" is checked
         assert _is_exact_match("de la médecine", doc) is True
@@ -589,17 +589,17 @@ class TestExactMatchHelpers:
         assert _is_exact_match("audio d'une fille qui parle de médecine", doc) is False
 
     def test_is_exact_match_multi_word(self):
-        from src.api.routes import _is_exact_match
+        from src.api.routes.search import _is_exact_match
         doc = "Budget trimestriel et objectifs de vente pour 2026"
         assert _is_exact_match("budget vente", doc) is True
         assert _is_exact_match("budget yoga", doc) is False
 
     def test_is_exact_match_empty_query(self):
-        from src.api.routes import _is_exact_match
+        from src.api.routes.search import _is_exact_match
         assert _is_exact_match("", "some document") is False
         assert _is_exact_match("   ", "some document") is False
 
     def test_is_exact_match_all_stopwords(self):
-        from src.api.routes import _is_exact_match
+        from src.api.routes.search import _is_exact_match
         # Query with only stopwords should return False (no content words to match)
         assert _is_exact_match("de la le", "anything") is False

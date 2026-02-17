@@ -145,7 +145,7 @@ async def test_update_config_language(client, tmp_path):
 
     from unittest.mock import patch
 
-    with patch("src.api.routes.find_config_path", return_value=config_file):
+    with patch("src.api.routes.config.find_config_path", return_value=config_file):
         resp = await client.put("/api/config", json={"language": "en"})
 
     assert resp.status_code == 200
@@ -183,7 +183,7 @@ async def test_update_config_restart_required(client, tmp_path):
 
     from unittest.mock import patch
 
-    with patch("src.api.routes.find_config_path", return_value=config_file):
+    with patch("src.api.routes.config.find_config_path", return_value=config_file):
         resp = await client.put(
             "/api/config", json={"audio": {"device": "my-mic"}}
         )
@@ -215,7 +215,7 @@ async def test_list_audio_devices(client):
     mock_devices = [
         {"index": 0, "name": "Test Mic", "channels": 1, "sample_rate": 16000.0}
     ]
-    with patch("src.api.routes.AudioCapture.list_devices", return_value=mock_devices):
+    with patch("src.api.routes.audio.AudioCapture.list_devices", return_value=mock_devices):
         resp = await client.get("/api/audio/devices")
 
     assert resp.status_code == 200

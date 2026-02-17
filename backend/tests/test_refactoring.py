@@ -256,7 +256,7 @@ class TestStopwordsLoading:
     """Tests for the lazy stopwords loader in routes."""
 
     def test_get_stopwords_returns_set(self):
-        from src.api.routes import _get_stopwords
+        from src.api.routes.search import _get_stopwords
 
         result = _get_stopwords()
         assert isinstance(result, set)
@@ -265,15 +265,15 @@ class TestStopwordsLoading:
 
     def test_get_stopwords_handles_missing_file(self):
         """If stopwords.json is missing, should return empty set without crashing."""
-        from src.api import routes
+        from src.api.routes import search as search_mod
 
-        original = routes._STOPWORDS_PATH
-        original_cache = routes._STOPWORDS
+        original = search_mod._STOPWORDS_PATH
+        original_cache = search_mod._STOPWORDS
         try:
-            routes._STOPWORDS = set()  # Reset cache
-            routes._STOPWORDS_PATH = Path("/nonexistent/stopwords.json")
-            result = routes._get_stopwords()
+            search_mod._STOPWORDS = set()  # Reset cache
+            search_mod._STOPWORDS_PATH = Path("/nonexistent/stopwords.json")
+            result = search_mod._get_stopwords()
             assert result == set()
         finally:
-            routes._STOPWORDS_PATH = original
-            routes._STOPWORDS = original_cache
+            search_mod._STOPWORDS_PATH = original
+            search_mod._STOPWORDS = original_cache

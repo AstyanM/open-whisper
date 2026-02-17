@@ -1,5 +1,6 @@
 # Claude
 .claude/
+.serena/
 
 # Dependencies
 node_modules/
