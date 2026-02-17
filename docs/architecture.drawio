@@ -1,0 +1,85 @@
+<mxfile host="65bd71144e">
+    <diagram name="Architecture" id="arch">
+        <mxGraphModel dx="517" dy="641" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="OpenWhisper - System Architecture" style="text;html=1;fontSize=22;fontStyle=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontColor=#1C1917;" parent="1" vertex="1">
+                    <mxGeometry x="285" width="600" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="audio-files" value="&lt;b&gt;Audio Files&lt;/b&gt;&lt;br&gt;WAV, MP3, FLAC, OGG..." style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontSize=11;size=0.15;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="35" width="140" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="mic" value="&lt;b&gt;Microphone&lt;/b&gt;&lt;br&gt;16kHz mono" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9FAFB;strokeColor=#6B7280;fontSize=11;arcSize=20;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="425" width="130" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="desktop" value="&lt;b&gt;Desktop&lt;/b&gt;&lt;br&gt;Text at Cursor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#EA580C;fontSize=11;arcSize=20;" parent="1" vertex="1">
+                    <mxGeometry x="960" y="202.5" width="125" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="llm-api" value="&lt;b&gt;LLM API&lt;/b&gt;&lt;br&gt;Ollama / LM Studio" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#F5F3FF;strokeColor=#7C3AED;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="402.5" width="180" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="tauri" value="Tauri v2 (Rust Shell)" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=#FFF7ED;strokeColor=#C2410C;verticalAlign=top;fontStyle=1;fontSize=14;startSize=28;arcSize=5;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="120" width="710" height="185" as="geometry"/>
+                </mxCell>
+                <mxCell id="react" value="&lt;b&gt;React 19 Frontend&lt;/b&gt;  (Vite + Tailwind + shadcn/ui)&lt;hr&gt;&lt;b&gt;Modes:&lt;/b&gt; Transcription  |  Dictation  |  File Upload&lt;br&gt;&lt;b&gt;Views:&lt;/b&gt; Sessions  |  Search  |  Settings&lt;br&gt;&lt;b&gt;LLM:&lt;/b&gt; Summarize  |  To-do List  |  Reformulate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#D97706;fontSize=11;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;arcSize=6;" parent="tauri" vertex="1">
+                    <mxGeometry x="15" y="35" width="490" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="rust" value="&lt;b&gt;Rust Features&lt;/b&gt;&lt;hr&gt;Global Shortcuts&lt;br&gt;System Tray&lt;br&gt;Text Injection (enigo)&lt;br&gt;Overlay Window" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F4;strokeColor=#78716C;fontSize=11;verticalAlign=top;align=left;spacingLeft=8;spacingTop=4;arcSize=6;" parent="tauri" vertex="1">
+                    <mxGeometry x="520" y="35" width="175" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="backend" value="Python Backend (FastAPI + Uvicorn)" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;fillColor=#F0FDF4;strokeColor=#16A34A;verticalAlign=top;fontStyle=1;fontSize=14;startSize=28;arcSize=5;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="375" width="710" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="audio-capture" value="&lt;b&gt;Audio Capture&lt;/b&gt;&lt;br&gt;&lt;i&gt;sounddevice&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#22C55E;fontSize=11;arcSize=12;" parent="backend" vertex="1">
+                    <mxGeometry x="15" y="45" width="155" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="transcription" value="&lt;b&gt;Transcription&lt;/b&gt;&lt;br&gt;&lt;i&gt;faster-whisper&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#22C55E;fontSize=11;arcSize=12;" parent="backend" vertex="1">
+                    <mxGeometry x="185" y="45" width="155" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="file-transcriber" value="&lt;b&gt;File Transcriber&lt;/b&gt;&lt;br&gt;&lt;i&gt;ffmpeg decode&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#22C55E;fontSize=11;arcSize=12;" parent="backend" vertex="1">
+                    <mxGeometry x="355" y="45" width="155" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="llm-client" value="&lt;b&gt;LLM Client&lt;/b&gt;&lt;br&gt;&lt;i&gt;OpenAI SDK&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#22C55E;fontSize=11;arcSize=12;" parent="backend" vertex="1">
+                    <mxGeometry x="525" y="45" width="155" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="sqlite" value="&lt;b&gt;SQLite&lt;/b&gt;&lt;br&gt;Sessions + Segments" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#DBEAFE;strokeColor=#3B82F6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="370" y="570" width="145" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="chromadb" value="&lt;b&gt;ChromaDB&lt;/b&gt;&lt;br&gt;Semantic Search" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#DBEAFE;strokeColor=#3B82F6;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="570" y="570" width="145" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-files" value="upload" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;fontSize=10;fontColor=#6B7280;strokeColor=#6B7280;" parent="1" source="audio-files" target="react" edge="1">
+                    <mxGeometry x="-0.0857" y="-10" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="560" y="110"/>
+                            <mxPoint x="450" y="110"/>
+                        </Array>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e-protocol" value="&lt;b&gt;HTTP + WebSocket&lt;/b&gt;&lt;br&gt;localhost:8001" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;fontSize=11;fontColor=#44403C;strokeColor=#44403C;strokeWidth=2;startArrow=classic;startFill=1;endArrow=classic;endFill=1;" parent="1" source="tauri" target="backend" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-mic" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeColor=#6B7280;endArrow=classic;endFill=1;" parent="1" source="mic" target="audio-capture" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-llm" value="optional" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;dashed=1;dashPattern=8 4;fontSize=10;fontColor=#7C3AED;strokeColor=#7C3AED;fontStyle=2;" parent="1" source="llm-client" target="llm-api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-desktop" value="dictation" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;fontSize=10;fontColor=#EA580C;strokeColor=#EA580C;endArrow=classic;endFill=1;" parent="1" source="rust" target="desktop" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-sqlite" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeColor=#3B82F6;endArrow=classic;endFill=1;" parent="1" source="backend" target="sqlite" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-chromadb" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeColor=#3B82F6;endArrow=classic;endFill=1;" parent="1" source="backend" target="chromadb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e-internal" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;html=1;strokeColor=#86EFAC;endArrow=classic;endFill=1;" parent="1" source="audio-capture" target="transcription" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

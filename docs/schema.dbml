@@ -1,0 +1,53 @@
+// OpenWhisper — Database Schema
+
+Project openwhisper {
+  database_type: 'SQLite'
+  Note: '''
+    # OpenWhisper Database
+    Local voice transcription app — SQLite storage for sessions and segments.
+    Migrations tracked via PRAGMA user_version (current: V1).
+  '''
+}
+
+// --- Enums ---
+
+Enum session_mode {
+  transcription [note: 'Live microphone transcription with timestamped history']
+  dictation     [note: 'Live microphone dictation injected at cursor']
+  file          [note: 'Offline transcription from uploaded audio file']
+}
+
+// --- Tables ---
+
+Table sessions {
+  id          integer [pk, increment]
+  mode        session_mode [not null, note: 'Transcription, dictation, or file upload']
+  language    text [not null, default: 'fr', note: 'ISO 639-1 language code']
+  started_at  datetime [not null]
+  ended_at    datetime [null]
+  duration_s  real [null, note: 'Session duration in seconds']
+  summary     text [null, note: 'LLM-generated summary (auto or manual)']
+  filename    text [null, note: 'Original filename (file mode only) - V1 migration']
+  created_at  datetime [default: `CURRENT_TIMESTAMP`]
+
+  Note: '''
+    Each recording session (live or file upload).
+    Indexed in ChromaDB for semantic search (summary preferred, full text fallback).
+  '''
+}
+
+Table segments {
+  id          integer [pk, increment]
+  session_id  integer [not null]
+  text        text [not null, note: 'Transcribed text for this segment']
+  start_ms    integer [not null, note: 'Segment start time in milliseconds']
+  end_ms      integer [null, note: 'Segment end time in milliseconds']
+  confidence  real [null, note: 'Whisper confidence score (0.0 - 1.0)']
+  created_at  datetime [default: `CURRENT_TIMESTAMP`]
+
+  Note: 'Individual transcription segments within a session, with timestamps and confidence.'
+}
+
+// --- Relationships ---
+
+Ref: segments.session_id > sessions.id [delete: cascade]
